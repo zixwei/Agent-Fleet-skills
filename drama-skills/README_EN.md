@@ -1,4 +1,4 @@
-<!-- Last synced with README.md: 2026-11-20 -->
+<!-- Last synced with README.md: 2026-11-21 -->
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/zenstory-ai/zenstory/main/apps/web/public/brand/zenstory-ai-mark.svg" alt="" width="76" height="76">
@@ -47,10 +47,12 @@ Drama Skills covers the AI short-drama and motion-comic pipeline from idea or so
 
 These skills grew out of our motion-comic studio's production line: after more than a thousand AI short-drama and motion-comic projects since 2025, a nearly 80,000-line all-in-one GUI could no longer keep up with model iteration, so we distilled our workflows and prompt craft into plain-file agent skills and kept only the generation queue in-house.
 
-- **Five Markdown files record creative decisions** — each episode maintains the files its stages need: `剧本.md` (script), `视觉设定.md` (visual design), `分镜.md` (storyboard), `图片提示词.md` (image prompts), and `视频提示词.md` (video prompts), plus `剪辑单.md` (cut list) when editing.
+- **Five Markdown files record creative decisions** — each episode maintains the files its stages need: `剧本.md` (script), `视觉设定.md` (visual design), `分镜.md` (storyboard), `图片提示词.md` (image prompts), and `视频提示词.md` (video prompts), plus `剪辑单.md` (cut list) when editing; when you run only part of the workflow, deliver only the documents for the stages you run.
 - **Written settings keep shots consistent** — any look that must hold across shots gets a continuity lock with a fixed phrase pasted verbatim into prompts, every first-frame prompt declares its on-screen settings, and a checker verifies cross-file references.
 - **Preview and confirm before spending money** — image, video (single shots or `GROUP-*` multi-shot groups), voice, and music jobs can be previewed as a batch first, listing exact counts, prompts, references, and parameters before calling external APIs; API keys stay outside the project and upstream files stay provider-neutral.
 - **Editing is part of the suite** — the editing skill records the reason for every in and out point, pulls subtitles verbatim from the script, normalizes loudness, and renders the episode; check and measurement scripts report objective results without making creative calls for you.
+
+> **Language-agnostic creative guidance vs. automated scripts**: The creative workflows, craft guides, prompt-writing methods, and review rubrics are language- and layout-agnostic—you can use them in English or any other language, aspect ratio, or existing directory structure without running local scripts. The bundled automated scripts (cross-document checks, local creator workspace, production handoff, and edit rendering) currently expect the standard Chinese five-document filenames (`剧本.md`, `视觉设定.md`, `分镜.md`, `图片提示词.md`, `视频提示词.md`), `剪辑单.md`, and their Chinese Markdown field structure.
 
 ## Install
 
@@ -60,7 +62,7 @@ Prerequisite: Claude Code, Codex, or another coding agent supporting the Agent S
 npx skills add zenstory-ai/drama-skills -y -g
 ```
 
-`-g` installs globally (omit it to install into the current directory only); **re-run the same command to update**. Local scripts require **Python 3.9 or newer**, and rendering an edited cut also needs `ffmpeg` / `ffprobe` on `PATH`.
+`-g` installs globally (omit it to install into the current directory only); **re-run the same command to update**. The 7 script-backed skills require **Python 3.9 or newer** (the other 5 documentation-only skills have no runtime prerequisites); `short-drama-edit` (rendering cuts) and `short-drama-breakdown` (benchmark video measurement and reverse-engineering) also need `ffmpeg` / `ffprobe` on `PATH`; optional Remotion complex screen-text panels or dynamic-subtitle overlays additionally need `Node.js` / `npm` / `npx` (plain title cards support `--screen-text-mode` `ffmpeg` fallback without Node/Remotion).
 
 On platforms that import skills directly from a GitHub URL (such as WorkBuddy; see the [community walkthrough](https://zhuanlan.zhihu.com/p/2088046501696222384) in Chinese), you can tell your agent:
 
@@ -91,7 +93,7 @@ Each skill directory is standalone; link only the directories you need. `short-d
 
 </details>
 
-Skills are also listed on [ClawHub](https://clawhub.ai/) (manifest: [`.clawhub/publish.json`](.clawhub/publish.json)). Claude Code invokes skills as `/short-drama`, Codex uses `$short-drama`, and plain-language requests work in any runtime; examples below use `$`.
+Skills are also listed on [ClawHub](https://clawhub.ai/) (manifest: [`.clawhub/publish.json`](.clawhub/publish.json)). The skills themselves use host-neutral skill names (such as `short-drama` and `short-drama-write`), while invocation prefixes differ by runtime: Claude Code uses `/short-drama`, Codex uses `$short-drama`, and other Agent Skill runtimes accept the plain skill name or natural language; examples below use `$`, so adapt or omit the prefix for your runtime.
 
 > Release notes are in [CHANGELOG.md](CHANGELOG.md) and [Releases](https://github.com/zenstory-ai/drama-skills/releases); for existing projects, see [What do I do after upgrading?](#what-do-i-do-after-upgrading).
 
@@ -195,14 +197,14 @@ The four originals: [`剧本.md`](examples/creator-first/EP001/剧本.md) · [`�
 
 ### Missing entries and mismatches are flagged
 
-`creator_markdown_check.py` checks cross-references across the five documents. Breaking the sample in two places—removing Zhou Bosen from SHOT-002's on-screen settings (`出场设定`) and changing MOTION-003's duration from 2s to 3s—produces targeted errors:
+`creator_markdown_check.py` follows a **soft-gate principle**: only 100% deterministic mechanical checks (dangling cross-document IDs, missing asset files, duration mismatches, malformed slot syntax) emit blocking `ERROR`s, while heuristic checks emit non-blocking `WARNING`s for the agent to review. Breaking the sample in two places—misspelling `周薄森` as `周博森` in SHOT-002's on-screen settings (`出场设定`) and changing MOTION-003's duration from 2s to 3s—produces targeted errors:
 
 ```text
-ERROR: SHOT-EP001-002: 首帧提示词写到人物「周薄森」，出场设定没有覆盖；本镜确实看不见时在出场设定末尾加「；画外：人物「周薄森」」，正文里这个名字不可靠时在《视觉设定.md》写「提示词名称：无」
+ERROR: SHOT-EP001-002: 出场设定指向不存在的《视觉设定.md》条目: 人物「周博森」
 ERROR: SHOT-EP001-003: 分镜时长 2 秒与视频提示词 3 秒不一致；视频提示词时长必须与分镜一致
 ```
 
-Line 1 flags that the first-frame prompt names "Zhou Bosen" without listing him in `出场设定` or marking him off-screen (`画外`). Line 2 catches a duration mismatch between the 2-second storyboard shot and the 3-second video prompt.
+Line 1 flags that `出场设定` references a character name (`周博森`) that does not exist in `视觉设定.md`. Line 2 catches a duration mismatch between the 2-second storyboard shot and the 3-second video prompt.
 
 ## The twelve skills
 
@@ -247,7 +249,7 @@ flowchart LR
 | `short-drama-image-prompts` | Lookdev style frames, character/location/prop reference prompts, and targeted image edits |
 | `short-drama-storyboard` | Scene staging and multi-angle comparisons, script-to-shot breakdown, start/end frames, and first/end-frame prompts |
 | `short-drama-video-prompts` | Single-shot motion, multi-character staging and eyeline shifts, camera moves, sound, `GROUP-*` multi-shot groups, pickup notes, and cross-shot music cues |
-| `short-drama-produce` | Preview single or batched image/video (including `GROUP-*` groups)/voice/music jobs, run provider APIs after explicit confirmation with resume support, and archive outputs; built-in profiles for Seedance, GPT Image 2, and MiniMax H3 / Speech / Music |
+| `short-drama-produce` | Preview single or batched image/video (including `GROUP-*` groups)/voice/music jobs, run provider APIs after explicit confirmation with resume support, and archive outputs; built-in profiles for Seedance, OpenAI GPT Image, and MiniMax H3 / Speech / Music |
 | `short-drama-edit` | Select usable ranges from single shots or `GROUP-*` clips, record in/out rationale, verify dialogue, burn subtitles, normalize loudness, and render finished episodes |
 | `short-drama-breakdown` | Measure benchmark dramas (episode/shot length, dialogue density, hooks/cliffhangers) against your project; reverse-engineer reference episodes into scripts, settings, and prompts |
 | `short-drama-review` | Structural and dramatic quality review; project-wide calibration and revision advice from real generated outputs |
@@ -264,7 +266,7 @@ Launch with one line inside your agent (Codex writes `$short-drama dashboard`):
 
 Runs natively on macOS, Linux, WSL, and Windows. The server runs in the background with `--detach` so its link stays live across your session; `--status` prints the active URL and `--stop` shuts it down. It listens on loopback only and never uploads project files.
 
-When ready to hand off, `project_tool.py export <project> --out <dir-outside-project>` packages each episode's existing five creator documents, `剪辑单.md`, and `制作成果/` into a delivery directory with a manifest and checksums; pass `--no-media` for a text-only handoff.
+When ready to hand off, `project_tool.py export <project> --out <dir-outside-project>` packages each episode's existing five creator documents, `剪辑单.md`, and `制作成果/` into a delivery directory with a manifest and checksums (pass `--no-media` for a text-only handoff), and `project_tool.py verify <export-dir>` re-checks the manifest and file checksums.
 
 ## FAQ
 

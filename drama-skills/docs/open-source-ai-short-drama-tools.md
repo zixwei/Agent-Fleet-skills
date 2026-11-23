@@ -14,7 +14,7 @@
 | [ViMax](https://github.com/HKUDS/ViMax) | 命令行 / 终端界面 + 本地网页 | MIT | 12,807 / 2026-09-30 | 点子/剧本/小说到视频：剧本、角色、分镜、图片、视频、拼装 | OpenAI 兼容 LLM、Nano Banana、Veo，更新日志里加入 GPT Image 2、Seedance 2.0 Fast | AutoCameo 用参考照片保持外观；每个关键帧生成 2 个候选再由视觉模型挑选 |
 | [DramaClaw](https://github.com/dramaclaw/dramaclaw) | 自托管网页应用（Docker）：无限画布 + 分集流水线 + 内置 Agent | Elastic License 2.0（要求界面标注 “Powered by DramaClaw”，不允许做成托管服务） | 6,658 / 2026-10-30 | 剧本、资产、分镜与首帧、图片、视频、配音、音乐、剪辑与字幕导出 | 所有推理走 OpenAI 兼容网关，可用官方网关或自带供应商；本机不跑模型 | 资产库维护跨集固定长相、角色立绘和每集换装造型；用 3D 场景与全景锁定空间（3D 预演标注内测） |
 | [shuohao-skills](https://github.com/eternityspring/shuohao-skills) | 编程 Agent skill 包（7 个），支持 Claude Code、Codex | Apache-2.0 | 5,733 / 2026-10-26 | 改编大纲、人物与美术设定、剧本、站位、分镜、角色参考图；不做视频生成与剪辑 | 写作用 Agent 自己的模型；参考图可走 ComfyUI、GPT Image 2 等 | character-refs 生成角色参考图交给分镜；美术设定写明固定外观特征 |
-| [Drama Skills](https://github.com/zenstory-ai/drama-skills)（我们） | 编程 Agent skill 包（12 个），支持 Claude Code、Codex，附本地创作台 | MIT | 3,560 / 2026-10-30 | 原著分析、对标拆解、分集剧本、视觉设定、分镜、图片/视频提示词、确认后生产（图、视频、配音、音乐）、剪辑成片、审查 | 写作用 Agent 自己的模型；生产阶段可选 Seedance、GPT Image 2、MiniMax H3 视频、MiniMax 语音与音乐，需自付费用 | 把固定穿着写成可原样贴进提示词的造型短语并绑定参考图，由检查脚本自动核对引用 |
+| [Drama Skills](https://github.com/zenstory-ai/drama-skills)（我们） | 编程 Agent skill 包（12 个），支持 Claude Code、Codex，附本地创作台 | MIT | 3,560 / 2026-10-30 | 原著分析、对标拆解、分集剧本、视觉设定、分镜、图片/视频提示词、确认后生产（图、视频、配音、音乐）、剪辑成片、审查 | 写作用 Agent 自己的模型；生产阶段可选 Seedance、OpenAI GPT Image、MiniMax H3 视频、MiniMax 语音与音乐，需自付费用 | 把固定穿着写成可原样贴进提示词的造型短语并绑定参考图，由检查脚本自动核对引用 |
 | [LocalMiniDrama](https://github.com/xuanyustudio/LocalMiniDrama) | Windows 桌面应用（Electron），也可从源码以网页方式运行 | MIT | 2,287 / 2026-10-30 | 故事/剧本、角色/场景/道具图、分镜、图片、视频、合成 | 通义、火山（豆包 / Seedance 2.0）、可灵、Vidu、Gemini、OpenAI 兼容等；本地只有 Ollama 且只用于文本 | `@图片N` 多图参考，加尾帧衔接 |
 | [ai-anime-series](https://github.com/10291124jcjc-dotcom/ai-anime-series) | Agent skill + Python 脚本，2026-10-28 新建 | 脚本 MIT，其余 CC BY-NC 4.0 | 220 / 2026-10-28 | 固定角色的单元剧：剧本与镜头表、角色设定图、宫格故事板、视频、拼合集；无配音 | 即梦 / Dreamina（需会员），出图出视频在即梦里手动操作 | 三视图、表情、动作、剪影组成的角色设定图加故事板，编号后一起作为参考 |
 
@@ -26,7 +26,7 @@
 
 **团队或工作室自己部署一套网页工作台**。看 DramaClaw、waoowaoo 和火宝短剧的 Docker 版。DramaClaw 覆盖环节最全，从剧本一直到配音、音乐和剪辑；waoowaoo 目前只接 OpenRouter，本版不含配乐和配音。两者都是 Elastic License 2.0，可以自用和二次开发，但不能把软件本身做成托管服务卖给别人。火宝是 CC BY-NC-SA 4.0，商用前要先联系作者。Toonflow 的服务端口没有登录鉴权，README 提醒服务器部署时要用防火墙或带认证的反向代理。
 
-**已经在用 Claude Code 或 Codex 写东西**。看 Drama Skills、shuohao-skills 和 ai-anime-series。这类工具不带界面，剧本和分镜用 Agent 当前的模型写，产出是文件夹里的 Markdown，便于逐条修改和版本管理。区别在覆盖范围：shuohao-skills 止步于分镜和角色参考图；Drama Skills 往后延伸到确认后生产、剪辑成片和审查；ai-anime-series 专做固定角色的单元剧，生成环节依赖在即梦里手动操作。
+**已经在用 Claude Code 或 Codex 写东西**。看 Drama Skills、shuohao-skills 和 ai-anime-series。这类工具主体运行在代理对话里，不依赖重型 Web 控制台（Drama Skills 另附以只读结构视图为主的本地创作台），剧本和分镜用 Agent 当前的模型写，产出是文件夹里的 Markdown，便于逐条修改和版本管理。区别在覆盖范围：shuohao-skills 止步于分镜和角色参考图；Drama Skills 往后延伸到确认后生产、剪辑成片和审查；ai-anime-series 专做固定角色的单元剧，生成环节依赖在即梦里手动操作。
 
 **想研究多智能体视频生成的做法**。看 ViMax。它是研究型框架，README 没有把自己定位成短剧或漫剧工具，但从小说生成视频（Novel2Video）和人物一致（AutoCameo）的实现可以参考。注意每个关键帧生成两个候选，会增加 API 费用。
 

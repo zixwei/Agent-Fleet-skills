@@ -77,18 +77,18 @@
 
 ## 检查器抓什么：把样例故意改坏两处
 
-出处：同上一节的公开样例。`creator_markdown_check.py` 自动核对一集五份文档之间的跨文档引用与格式规则。样例原样跑直接通过；如果故意删掉 `SHOT-EP001-002` 出场设定里的周薄森，再把 `MOTION-EP001-003` 的时长从 `2s` 改成 `3s`，它会直接报出具体原因，而不只是笼统的一句「校验失败」：
+出处：同上一节的公开样例。`creator_markdown_check.py` 遵循**软门禁原则**——只将 100% 确定性的跨文档机械与安全核对设为硬阻断 `ERROR`，其余启发式提醒仅输出 `WARNING` 供复核，语义与连戏保真交由 `short-drama-review` 把关。样例原样跑直接通过；如果故意把 `SHOT-EP001-002` 出场设定里的「周薄森」写错成「周博森」，再把 `MOTION-EP001-003` 的时长从 `2s` 改成 `3s`，它会直接报出具体原因，而不只是笼统的一句「校验失败」：
 
 ```text
 $ python3 skills/short-drama/scripts/creator_markdown_check.py examples/creator-first/EP001 --project-root examples/creator-first
 OK: examples/creator-first/EP001
 
 $ python3 skills/short-drama/scripts/creator_markdown_check.py <改坏的副本>/EP001 --project-root <改坏的副本>
-ERROR: SHOT-EP001-002: 首帧提示词写到人物「周薄森」，出场设定没有覆盖；本镜确实看不见时在出场设定末尾加「；画外：人物「周薄森」」，正文里这个名字不可靠时在《视觉设定.md》写「提示词名称：无」
+ERROR: SHOT-EP001-002: 出场设定指向不存在的《视觉设定.md》条目: 人物「周博森」
 ERROR: SHOT-EP001-003: 分镜时长 2 秒与视频提示词 3 秒不一致；视频提示词时长必须与分镜一致
 ```
 
-它还会核对：每镜「来源」必须以《剧本.md》里真实存在的场次编号开头；「首帧提示词」「尾帧提示词」与文生视频「开场画面」里点到的人物、地点、道具等条目要么列进「出场设定」、要么注明画外（不扫描「来源」引文）；剧本里每场戏都有对应镜头，或写进「未拍场次」并说明理由；可复制提示词里带说话动词或 `<d>` 标签的角色开口台词，都能在《剧本.md》《视觉设定.md》或《分镜.md》里找到（不计标点，不误拦普通招牌字或成语引号）；`REF-*` 指向的图片确实存在于项目目录里，且每张都写明了用途。
+它还会确定性地核对：每镜「来源」必须以《剧本.md》里真实存在的场次编号开头；剧本里每场戏都有对应镜头，或写进「未拍场次」并说明理由；「出场设定」「图片提示词项」与连戏锁指向的 `SHOT-...`/`IMG-...` 条目都真实存在；`MOTION-...` 指向已存在的 `SHOT-...` 且时长完全相等，`GROUP-...` 成员同场紧邻、时长等于成员之和且全集覆盖无重漏；`REF-*` / `REF-VOICE-*` 指向的图片或音频文件确实存在于项目目录里，且用途、顺序与控制边界符合槽位语法。跨语种提示词名称缺项等非 100% 确定性事项仅输出软 `WARNING` 提醒复核，而正文连戏锁词保留、口型与台词溯源等语义核对由 `short-drama-review` 在上下文中审查。
 
 ## 对白先估时再定镜长，剪辑再按实测下刀
 
@@ -153,11 +153,11 @@ ERROR: SHOT-EP001-003: 分镜时长 2 秒与视频提示词 3 秒不一致；视
 
 这次实跑的原件——[剪辑单](https://github.com/zenstory-ai/drama-skills/blob/004d945d452f4eb607c5820f437218217af60f6e/evaluations/%E8%AE%A9%E4%BD%A0%E7%AE%A1%E8%B4%A6%E5%8F%B7/reference-run-0.6.6/%E5%89%A7%E9%9B%86/EP001/%E5%89%AA%E8%BE%91%E5%8D%95.md)、
 [21 镜分镜](https://github.com/zenstory-ai/drama-skills/blob/004d945d452f4eb607c5820f437218217af60f6e/evaluations/%E8%AE%A9%E4%BD%A0%E7%AE%A1%E8%B4%A6%E5%8F%B7/reference-run-0.6.6/%E5%89%A7%E9%9B%86/EP001/%E5%88%86%E9%95%9C.md)
-与 [RUN-LOG](https://github.com/zenstory-ai/drama-skills/blob/004d945d452f4eb607c5820f437218217af60f6e/evaluations/%E8%AE%A9%E4%BD%A0%E7%AE%A1%E8%B4%A6%E5%8F%B7/reference-run-0.6.6/RUN-LOG.md)——连同八段素材和成片都在提交 `004d945` 里，按仓库规则不再保留在当前代码目录里。它们按 v0.6.6 的旧规则写成；用现在的检查器重跑除了字段改名以及核对「首帧提示词」「尾帧提示词」和文生视频「开场画面」是否被「出场设定」覆盖外，剪辑单里的 13 个未采用镜号也要逐个列出（不再支持范围简写），旧项目升级改法见常见问题[「升级到新版本后要做什么」](../README.md#升级到新版本后要做什么)。
+与 [RUN-LOG](https://github.com/zenstory-ai/drama-skills/blob/004d945d452f4eb607c5820f437218217af60f6e/evaluations/%E8%AE%A9%E4%BD%A0%E7%AE%A1%E8%B4%A6%E5%8F%B7/reference-run-0.6.6/RUN-LOG.md)——连同八段素材和成片都在提交 `004d945` 里，按仓库规则不再保留在当前代码目录里。它们按 v0.6.6 的旧规则写成；用现在的检查器重跑除了字段改名与核对跨文档引用解析外，剪辑单里的 13 个未采用镜号也要逐个列出（不再支持范围简写），旧项目升级改法见常见问题[「升级到新版本后要做什么」](../README.md#升级到新版本后要做什么)。
 
 ## 原著快评会被自己的全量结果对照
 
-出处：`evaluations/让你管账号/reference-run`（v0.4.2 实跑）。`$short-drama-novel-analyze` 先等距抽 12 章做快评，再全量拆完 20 章；全量拆完后回头逐条对照快评，写明哪条判断被推翻（原表 7 行，节选 4 行）：
+出处：`evaluations/让你管账号/reference-run`（v0.4.2 实跑）。`short-drama-novel-analyze` 先等距抽 12 章做快评，再全量拆完 20 章；全量拆完后回头逐条对照快评，写明哪条判断被推翻（原表 7 行，节选 4 行）：
 
 | 抽样快评判断 | 全量拆解结果 | 结论 |
 |---|---|---|
@@ -171,14 +171,14 @@ ERROR: SHOT-EP001-003: 分镜时长 2 秒与视频提示词 3 秒不一致；视
 > 下一本书做快评时，应当先看这一章起什么戏剧作用，再看原著用了什么表现形式。
 
 （这次的执行者事先通读过全书，`triage.md` 开头的「执行者声明」写明对照结果因此偏乐观：它示范的是回查核对做法，测不出盲抽本身的准确度。）
-该次 v0.4.2 实跑记录中，每个候选集都带 `source_ref` / `chapter_range` 指回章节索引，`creator_acceptance` 一律填 `pending`；现行流程改为写入含 `chapter_range`、`payoffs` 等核心字段的轻量记录，作为待定建议移交故事开发（`$short-drama-develop`）由创作者拍板。
+该次 v0.4.2 实跑记录中，每个候选集都带 `source_ref` / `chapter_range` 指回章节索引，`creator_acceptance` 一律填 `pending`；现行流程改为写入含 `chapter_range`、`payoffs` 等核心字段的轻量记录，作为待定建议移交故事开发（`short-drama-develop`）由创作者拍板。
 原文：[`triage.md`](../evaluations/让你管账号/reference-run/项目开发/source-analysis/triage.md) ·
 [`adaptation-value.md`](../evaluations/让你管账号/reference-run/项目开发/source-analysis/adaptation-value.md) ·
 [`episode-candidates.jsonl`](../evaluations/让你管账号/reference-run/项目开发/source-analysis/episode-candidates.jsonl)
 
 ## 原著设定兑现表：每条关键设定写明在哪一集、哪个画面拍出来
 
-出处同上。`$short-drama-develop` 把原著里不可更改的关键设定列成表，每条都要答出「观众从哪个画面看懂它」；首集暂不交代的就明确标出留到第几集（原表 9 行，节选 3 行）：
+出处同上。`short-drama-develop` 把原著里不可更改的关键设定列成表，每条都要答出「观众从哪个画面看懂它」；首集暂不交代的就明确标出留到第几集（原表 9 行，节选 3 行）：
 
 | ID | 原著关键设定 | 本轮兑现方式 |
 |---|---|---|
@@ -186,7 +186,7 @@ ERROR: SHOT-EP001-003: 分镜时长 2 秒与视频提示词 3 秒不一致；视
 | F-C5 | 主角不懂音乐，前世靠请音乐顾问，连有名的曲子都抄不出来 | **EP001 兑现**。画面表现：他写下「配乐」两个字后笔尖停住，把笔扔开 |
 | F-SYS-COST | 装置有代价 | **明确留到第 7 集（EP007）交代**（代价第一次在画面里显现）。EP001 只埋下规则伏笔，暂不揭晓 |
 
-这一轮在开写 EP001 前先把金手指的规则底表（适用范围、失灵条件与使用代价）理清并请创作者确认，剧里再按集逐步揭晓；对应开发阶段的默认做法（`STY-17`，`craft_default`），避免写到死角才毫无铺垫地临时补规则救场：
+这一轮在开写 EP001 前先把金手指的规则底表（适用范围、失灵条件与使用代价）理清并请创作者确认，剧里再按集逐步揭晓；这是故事开发阶段的常见手艺做法，避免写到死角才毫无铺垫地临时补规则救场：
 
 > DEV-04 · 使用代价：装置给的每一样东西都会被这个世界当成他自己的才华。这个误认无法澄清——他一旦否认，
 > 装置授予的能力在该次表演中失效。首次生效：EP001（代价第一次可见在 EP007）。
