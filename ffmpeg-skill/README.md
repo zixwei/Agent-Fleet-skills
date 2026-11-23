@@ -22,6 +22,7 @@ No cloud · No API keys · Python standard library</p>
   <a href="https://github.com/kajisho5/ffmpeg-skill/actions/workflows/ci.yml"><img src="https://github.com/kajisho5/ffmpeg-skill/actions/workflows/ci.yml/badge.svg" alt="tests"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/kajisho5/ffmpeg-skill"><img src="https://api.scorecard.dev/projects/github.com/kajisho5/ffmpeg-skill/badge" alt="OpenSSF Scorecard"></a>
   <a href="https://www.npmjs.com/package/ffmpeg-skill"><img src="https://img.shields.io/npm/v/ffmpeg-skill" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/ffmpeg-skill"><img src="https://img.shields.io/npm/dm/ffmpeg-skill" alt="npm downloads per month"></a>
   <a href="#ffmpeg-compatibility"><img src="https://img.shields.io/badge/ffmpeg-6.1%20%7C%207.1%20%7C%208%20%7C%209%20tested-orange" alt="FFmpeg 6.1, 7.1, 8 and 9 tested in CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
   <a href="https://github.com/sponsors/kajisho5"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors" alt="Sponsor"></a>
@@ -30,6 +31,20 @@ No cloud · No API keys · Python standard library</p>
 <p align="center">
   <a href="https://kajisho5.github.io/ffmpeg-skill/"><img src="brand/og.png" width="720" alt="ffmpeg-skill v4: Edit. Measure. Ship. 42 local FFmpeg tools, 12 stable; your agent does the work. A card shows final.mp4 measured: 59.98 s, 1080x1920, 30 fps, -14.0 LUFS, verified."></a>
 </p>
+
+<p align="center">
+  <a href="#quick-start"><img src="brand/button-install.svg" height="56" alt="Install: npx ffmpeg-skill setup"></a>
+  &nbsp;
+  <a href="https://kajisho5.github.io/ffmpeg-skill/#showcase"><img src="brand/button-demos.svg" height="56" alt="Watch the demos"></a>
+</p>
+
+<p align="center">
+  <a href="https://trendshift.io/repositories/211415"><img src="https://trendshift.io/api/badge/repositories/211415" alt="kajisho5/ffmpeg-skill on Trendshift: GitHub Trending, repository of the day" width="250" height="55"></a>
+  &nbsp;
+  <a href="https://www.star-history.com/kajisho5/ffmpeg-skill"><img src="https://api.star-history.com/badge?repo=kajisho5/ffmpeg-skill&type=rank" alt="Star History: global rank among GitHub repositories" height="55"></a>
+</p>
+
+<p align="center"><b>English</b> · <a href="https://kajisho5.github.io/ffmpeg-skill/?lang=ja">日本語（サイト）</a></p>
 
 ```bash
 npx ffmpeg-skill
@@ -248,7 +263,7 @@ These are the rules the skill file gives the agent and the code enforces.
 | Tool | What it does |
 |---|---|
 | `cut.py` | In/out or multi-segment cuts, lossless `-c copy` first, re-encode fallback, `--accurate` for frame-exact video and sample-exact audio, `--smart` for a frame-exact H.264 cut that re-encodes only the partial GOPs at the cut points (matched to the source, verified against its packets and frames) and copies the rest, an SDR HEVC source re-encodes as HEVC (`--no-keep-hevc` for x264), a single `.mp4`/`.mov` copy keeps its edit list, so the picture starts at `--start` unless a keyframe lands later (`start_snapped` then says so; `--no-edit-list` for 2.x's shifted start), `--vfr-guard` to choose the VFR check (`sampled` by default); reports `precision`; `--snap beats` moves the in/out points onto a measured beat, or refuses when there is no measurable pulse ; `--remove A-B,...` drops ranges and keeps the rest |
-| `join.py` | Concatenate clips with xfade transitions, normalising size, fps, sample rate and channel layout (the widest clip's, or `--channels`); audio-only inputs are joined as audio; `--list parts.txt` reads generated segments (TTS lines) and checks every one first — missing, empty or unreadable parts are all named in one refusal, or skipped and reported with `--on-missing skip` ; `--copy --transition none` joins clips with matching streams by stream copy, measured afterwards, and refuses a mismatch by name |
+| `join.py` | Concatenate clips with xfade transitions, normalising size, fps, sample rate and channel layout (the widest clip's, or `--channels`); audio-only inputs are joined as audio; `--list parts.txt` reads generated segments (TTS lines) and checks every one first — missing, empty or unreadable parts are all named in one refusal, or skipped and reported with `--on-missing skip` ; `--copy --transition none` joins clips with matching streams by stream copy, measured afterwards, and refuses a mismatch by name; `--transition none --audio-lead S` / `--audio-lag S` make a J-cut / L-cut (the next sound starts S before its picture / the last sound runs S past the picture change; sync kept) |
 | `silence.py` | Detect and remove dead air (jump cuts) with a margin around speech (`--margin`, 0.2 s each side); list or export the cut list, or a source-to-output time map (`--timemap`, JSON or CSV); reports the level at every cut and warns where one may land in a breath or a word's tail; `--filler` also removes filler words, but only where a speech engine timed them; `--speech-aware` keeps a breath inside a sentence and cuts only at sentence-boundary pauses, composing with `--filler` through the same `keep_ranges()`; `--margin-lead` / `--margin-tail` keep different amounts before and after speech, and with word timings `--sentence-min-silence` / `--sentence-margin-tail` give the pause after a sentence end (the transcript's punctuation) its own floor and tail |
 | `fit.py` | Fit to a duration (choose a method for large speed changes), aspect ratio (pad, crop or blurred fill) or exact size. `picture` measures the written frame. `crop_check` flags discarded motion or detail and can suggest `--crop-x`/`--crop-y`. Rotate 90/180/270, flip h/v and force constant fps. |
 | `crop.py` | Crop to an exact pixel rectangle (`--x --y --width --height`) — distinct from `fit.py --fit crop`, which crops to an aspect ratio it computes itself |
@@ -276,7 +291,7 @@ These are the rules the skill file gives the agent and the code enforces.
 
 | Tool | What it does |
 |---|---|
-| `audio.py` | Voice clean-up chain at three strengths (`--voice light\|medium\|strong`), FFT denoise, typed compressor / limiter / gate, music bed with sidechain ducking (`--duck-amount/-threshold/-attack/-release`), a never-ducked effects bed (`--effects`), `--stereo-widen`, fades, 5.1 → stereo, track replacement, extraction (`-o out.wav`), `--audio-stream N`, a tempo change that keeps the pitch (`--tempo`, atempo stages in 0.5–2.0) and an exact length in samples (`--length-samples`), resampling (`--sample-rate`) and one channel by index (`--channel N`), each read back from the output |
+| `audio.py` | Voice clean-up chain at three strengths (`--voice light\|medium\|strong`), FFT denoise, typed compressor / limiter / gate, music bed with sidechain ducking (`--duck-amount/-threshold/-attack/-release`), a never-ducked effects bed (`--effects`), `--stereo-widen`, fades, 5.1 → stereo, track replacement, extraction (`-o out.wav`), `--audio-stream N`, a tempo change that keeps the pitch (`--tempo`, atempo stages in 0.5–2.0) and an exact length in samples (`--length-samples`), resampling (`--sample-rate`) and one channel by index (`--channel N`), each read back from the output; `--track FILE` (repeatable) with `--track-name` / `--track-lang` writes the input's sound and each file's as separate named, language-tagged audio tracks in a `.mov`, `.mkv` or `.mp4`, each as it is, read back from the output |
 | `sync.py` | Offset between two recordings by audio cross-correlation (1 ms, pure Python), clock-drift correction; aligned video or audio out (audio-to-audio only — no lip-sync/face detection); a third or later camera is an additional `more_sources` positional (`sync.py REF A B ...`), the `second` positional itself keeps its name |
 | `loudness.py` | Two-pass EBU R128 `loudnorm` to −14 LUFS / −1 dBTP or any target (`--lra` for the range), video stream-copied; the written file is measured again and re-encoded until it meets `--tp` (lossy encoders overshoot); `--measure-only`; `--versions streaming,ebu-r128,broadcast-jp` (or `LUFS/TP` pairs) writes one file per target from one master, each measured after and listed in `versions` (`output` is null), `verified` only when every version met its own target |
 
@@ -793,6 +808,19 @@ FFmpeg itself:
 
 - **Put it first on `PATH`.** Add `export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"` to your shell profile. `brew --prefix ffmpeg-full` is the stable `opt/` path, so this survives upgrades, but it only reaches processes started from a shell that read the profile.
 - **Link it over the lean formula:** `brew unlink ffmpeg 2>/dev/null; brew link --overwrite --force ffmpeg-full`. Every process finds this one, but `brew doctor` warns about a linked keg-only formula, and an upgrade of the lean `ffmpeg` has been seen to link the lean build back on top without a message. After upgrading, check that `command -v ffmpeg` still resolves into `ffmpeg-full`, and re-run the link if it doesn't.
+
+### Updating
+
+Releases are frequent (often several a week), and nothing updates by itself: the tools never go online, so a copy stays at the version you installed until you replace it.
+
+```bash
+grep '"version"' ~/.claude/skills/ffmpeg-skill/package.json   # the version installed (Cursor: ~/.cursor/skills, Codex: ~/.agents/skills)
+npm view ffmpeg-skill version                                  # the latest release
+npx ffmpeg-skill@latest setup                                  # replace every installed copy with the latest
+claude plugin update                                           # when installed as a Claude Code plugin
+```
+
+`npx ffmpeg-skill@4.1.3` installs that exact version, for a setup that should not move. What changed between two versions is in [CHANGELOG.md](CHANGELOG.md), one short section per release. Within 4.x an update does not break a call to one of the 12 stable tools (see [Stability](#stability)).
 
 ## Requirements
 
