@@ -1257,12 +1257,12 @@ def main() -> int:
     sty.add_argument("--brand", help="brand.json: font, colours, caption size/position/animation defaults")
     sty.add_argument("--font", default=None, help="font family, e.g. 'Noto Sans CJK JP' for Japanese (default DejaVu Sans or brand font)")
     sty.add_argument("--fonts-dir", help="directory with extra .ttf/.otf files")
-    sty.add_argument("--size", type=int, default=None, help="font size in ASS points (relative to a 288p script height, scales automatically)")
+    sty.add_argument("--font-size", "--size", dest="size", type=int, default=None, help="font size in ASS points (relative to a 288p script height, scales automatically)")
     sty.add_argument("--color", default=None, help="text colour RRGGBB (default FFFFFF or brand text colour)")
     sty.add_argument("--outline-color", default=None, help="outline colour RRGGBB")
     sty.add_argument("--outline", type=float, default=None, help="outline width (default 2)")
     sty.add_argument("--shadow", type=float, default=0.0, help="shadow depth (default 0)")
-    sty.add_argument("--bold", action="store_true")
+    sty.add_argument("--bold", action="store_true", help="bold caption text")
     sty.add_argument("--position", choices=sorted(ALIGN), default=None, help="on-screen placement (default bottom)")
     sty.add_argument("--margin", type=int, default=None, help="vertical margin from the edge in ASS units (default 30, or the --platform safe zone)")
     sty.add_argument("--platform", choices=PLATFORM_CHOICES, default=None,
@@ -1315,7 +1315,7 @@ def main() -> int:
     anim.add_argument("--write-ass", help="where to save the generated ASS (default: next to the output)")
     enc = ap.add_argument_group("encoding")
     enc.set_defaults(crf=18)  # --quality's default (the --crf alias was removed in 2.0)
-    enc.add_argument("--preset", default="medium", choices=X264_PRESETS)
+    enc.add_argument("--preset", default="medium", choices=X264_PRESETS, help="x264 preset")
     add_common(ap)
     args = ap.parse_args(_glue_negative_offset(sys.argv[1:]))
     apply_common(args)
@@ -1966,31 +1966,26 @@ def main() -> int:
     if args.ass:
         # the caller's own ASS names its fonts in its styles; this run does not choose them
         font_used = {"asked": None, "file": None, "family": None, "how": "ass_styles",
-                     "fonts_dir": args.fonts_dir or (os.path.dirname(font_file) if font_file else None), "substituted": False}
+                     "fonts_dir": args.fonts_dir or (os.path.dirname(font_file) if font_file else None), "substituted": None}
     elif font_file or not args.fonts_dir:
         # the family libass is given is the sanitised one (ass_font_name): that is what it resolves
         font_used = record_font_choice(font_choice(ass_font_name(args.font), script_file=font_file, script_family=font_family,
                                                    renderer="libass", bold=bool(args.bold)))
     else:
-        # libass looks the family up in the folder first and asks fontconfig when no face there
-        # has its name, so a folder without it drew another face and the result said
-        # substituted: false (#531). The folder is read for a face of that name; without one, the
-        # family is resolved as it is with no --fonts-dir (a substitution when that is another family).
+        # A literal directory miss does not rule out a fontconfig alias to a loaded face.
         asked = ass_font_name(args.font)
         face, found = fonts_dir_face(args.fonts_dir, asked, bold=bool(args.bold))
         if found is False:
-            note(f"font: no face in {args.fonts_dir} is named '{asked}', so libass asks fontconfig for it as without --fonts-dir")
-            font_used = dict(record_font_choice(font_choice(asked, renderer="libass", bold=bool(args.bold))), fonts_dir=args.fonts_dir)
-        else:
-            if found is None:
-                note(f"font: whether {args.fonts_dir} holds a face named '{asked}' could not be read (no fc-scan); "
-                     "font_used reports it as asked")
-            elif face is None:
-                note(f"font: {args.fonts_dir} holds '{asked}' only in other styles than the one asked "
-                     f"({'bold' if args.bold else 'regular'}, upright); libass picks among those and the installed "
-                     "faces of the family, so font_used names no file (not measured)")
-            font_used = {"asked": asked, "file": face, "family": asked, "how": "fonts_dir",
-                         "fonts_dir": args.fonts_dir, "substituted": False}
+            note(f"font: no outline face in {args.fonts_dir} is named '{asked}'; libass may pick a directory face through a fontconfig alias, so the face is not established")
+        elif found is None:
+            note(f"font: whether {args.fonts_dir} holds a face named '{asked}' could not be read (fc-scan unavailable or incomplete metadata); "
+                 "font_used reports it as asked")
+        elif face is None:
+            note(f"font: {args.fonts_dir} holds '{asked}' only in other styles than the one asked "
+                 f"({'bold' if args.bold else 'regular'}, upright); libass picks among those and the installed "
+                 "faces of the family, so font_used names no file (not measured)")
+        font_used = {"asked": asked, "file": face, "family": asked, "how": "fonts_dir",
+                     "fonts_dir": args.fonts_dir, "substituted": False if face else None}  # no file, no measurement (#663)
     if font_file:
         args.font = font_family or args.font
         if not args.fonts_dir:

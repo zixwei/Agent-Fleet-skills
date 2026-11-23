@@ -145,7 +145,7 @@ def step(name: str, argv: List[str], timeout: float) -> Dict:
         return r
     # argv[1] is the step's input: one named -take.mp4 is given as ./-take.mp4, or the step's
     # parser reads it as an option (collect()'s Path drops a ./ the caller wrote, #558)
-    child = subprocess.Popen([sys.executable, str(HERE / argv[0]), file_arg(argv[1])] + argv[2:] + _forwarded(argv) + ["--json"], stdout=subprocess.PIPE,
+    child = subprocess.Popen([sys.executable, str(HERE / argv[0]), file_arg(argv[1])] + argv[2:] + _forwarded(argv) + ["--json"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
     # watched like run_tool()'s child (review of #530): a SIGTERM or Ctrl-C to verify.py stops the
     # step through stop_children() -- its own handler removes its partial output and lock --
@@ -192,7 +192,7 @@ def main() -> int:
     ap.add_argument("--out", help="directory for outputs (default: temp dir, deleted unless --keep)")
     ap.add_argument("--keep", action="store_true", help="keep the outputs (without --out: in a new folder, named as out_dir and on stderr)")
     ap.add_argument("--quick", action="store_true", help="probe, copy cut, fit, caption, export only")
-    ap.add_argument("--seconds", type=float, default=6.0, help="length of the test cut taken from each file (default 6)")
+    ap.add_argument("--duration", "--seconds", dest="seconds", type=float, default=6.0, help="length of the test cut taken from each file (default 6)")
     ap.add_argument("--timeout", type=float, default=600.0, help="per-step timeout in seconds (default 600; 0 = no limit, as everywhere else)")
     ap.add_argument("--report", help="write a Markdown report here")
     add_common(ap)

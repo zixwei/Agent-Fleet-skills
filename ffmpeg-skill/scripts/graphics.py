@@ -89,7 +89,7 @@ def main(force_route: Optional[str] = None) -> int:
                      help="which audio stream of the input to keep, 0-based in file order (probe.py lists them under "
                           "audio_streams) -- matters on a multi-track input (dubbed languages, M&E stems); default 0, "
                           "the first track, same as leaving it unset always did")
-    ap.add_argument("--template", choices=TEMPLATES, required=True)
+    ap.add_argument("--template", choices=TEMPLATES, required=True, help="graphic to draw: " + ", ".join(TEMPLATES))
     ap.add_argument("--brand", help="brand.json for colours, font, safe margin")
     ap.add_argument("--name", help="lower-third: name line")
     ap.add_argument("--title", help="title / chapter / bug / hook text, or lower-third second line")
@@ -98,7 +98,7 @@ def main(force_route: Optional[str] = None) -> int:
     ap.add_argument("--bottom", help="meme: lower line")
     ap.add_argument("--duration", type=float, default=3.0, help="hook: seconds the opening card stays up (default 3)")
     ap.add_argument("--subtitle", help="title: smaller second line")
-    ap.add_argument("--from", dest="count_from", type=int, default=5, help="countdown start number (default 5)")
+    ap.add_argument("--from", dest="count_from", type=int, default=5, help="countdown start number, 0..600 (default 5)")
     ap.add_argument("--start", help="show from (default 0)")
     ap.add_argument("--end", help="hide after (default end of clip)")
     ap.add_argument("--position", choices=["top-left", "top-right", "bottom-left", "bottom-right"], default=None, help="corner for chapter/bug/sticker (default bottom-left / top-right / top-right)")
@@ -108,8 +108,8 @@ def main(force_route: Optional[str] = None) -> int:
                          "(TikTok's description bar and like column, the Reels/Shorts chrome). An explicit --margin wins")
     ap.add_argument("--primary", help="override brand primary colour RRGGBB")
     ap.add_argument("--text-color", help="override text colour RRGGBB")
-    ap.add_argument("--font")
-    ap.add_argument("--font-file")
+    ap.add_argument("--font", help="font family (fontconfig name; default DejaVu Sans, or the --brand file's font)")
+    ap.add_argument("--font-file", help="explicit .ttf/.otf/.ttc path (use this for CJK fonts)")
     ap.add_argument("--lang", help="language code of the text (e.g. ja, zh, ko): the hint that says whether Han-only "
                                    "text is Chinese, Japanese or Korean when a font is picked by script")
     ap.add_argument("--scale", type=float, default=1.0, help="size multiplier (default 1)")
@@ -138,15 +138,13 @@ def main(force_route: Optional[str] = None) -> int:
                      help="emoji box as a multiple of the line's font size (default 1.0)")
     emo.add_argument("--emoji-max", type=int, default=60, help="most emoji overlays one run may build (default 60)")
     ap.set_defaults(crf=18)  # --quality's default (the --crf alias was removed in 2.0)
-    ap.add_argument("--preset", default="medium", choices=X264_PRESETS)
+    ap.add_argument("--preset", default="medium", choices=X264_PRESETS, help="x264 preset")
     add_alpha_args(ap)
     add_common(ap)
     args = ap.parse_args()
     apply_common(args)
     # A176: --from -1 divided by zero (a traceback, no JSON); --from -3 built an empty filter
     # graph and --scale 0 or below a 0-px or negative box, both refused by ffmpeg (kind ffmpeg)
-    if args.count_from < 0:
-        die(f"--from must be 0 or more (the number the countdown starts at), got {args.count_from}")
     if args.scale <= 0:
         die(f"--scale must be more than 0 (a size multiplier; 1 is the template's own size), got {args.scale:g}")
     # 2.2.6: whitespace-only text is no text -- stripped before the "needs --title" checks, which

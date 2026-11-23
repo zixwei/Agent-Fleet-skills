@@ -135,10 +135,10 @@ def font_choice(asked: "Optional[str]", *, font_file: "Optional[str]" = None, sc
                 script_file = face["file"]
         return {"asked": asked, "file": script_file, "family": script_family, "how": "script", "substituted": False}
     if renderer == "libass" and platform.system() == "Windows":
-        return {"asked": asked, "file": None, "family": asked, "how": "by_name", "substituted": False}
+        return {"asked": asked, "file": None, "family": asked, "how": "by_name", "substituted": None}
     found = resolve_font((asked or "") + weight)
     if not found["file"]:
-        return {"asked": asked, "file": None, "family": asked, "how": "by_name", "substituted": False}
+        return {"asked": asked, "file": None, "family": asked, "how": "by_name", "substituted": None}
     return {"asked": asked, "file": found["file"], "family": found["family"], "how": "resolved",
             "substituted": bool(found["substituted"]), "via": found["via"]}
 
@@ -720,7 +720,7 @@ def _fonts_dir_face(fonts_dir: str, family: str, bold: bool) -> "Tuple[Optional[
                        if not name.startswith(".") and os.path.isfile(os.path.join(fonts_dir, name)))
     except OSError:
         return None, None
-    fmt = "%{file}\t%{index}\t%{family}\t%{postscriptname}\t%{fontformat}\t%{weight}\t%{slant}\t%{fullname}\n"
+    fmt = "%{file}\t%{index}\t%{family}\t%{postscriptname}\t%{fontformat}\t%{weight}\t%{slant}\t%{fullname}\t%{outline}\n"
     lines = []
     for at in range(0, len(files), _FC_SCAN_CHUNK):
         try:
@@ -739,7 +739,9 @@ def _fonts_dir_face(fonts_dir: str, family: str, bold: bool) -> "Tuple[Optional[
     exact, named, other_styles = [], [], False
     for line in lines:
         cells = line.split("\t")
-        if len(cells) < 8 or not cells[0]:
+        if len(cells) < 9 or cells[8].strip().lower() not in ("true", "false"):
+            return None, None
+        if not cells[0] or cells[8].strip().lower() != "true":
             continue
         path, index, fc_family, psname, fontformat, fc_weight, slant, fc_full = cells[:8]
         try:

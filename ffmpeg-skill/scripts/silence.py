@@ -593,9 +593,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("input")
     ap.add_argument("-o", "--output", help="output file (default: <name>_tight.<ext>)")
-    ap.add_argument("--threshold", type=float, default=-35.0, help="silence level in dBFS (default -35; use -40..-45 for quiet rooms)")
-    ap.add_argument("--min-silence", type=float, default=0.6, help="the min duration of a pause: only remove gaps at least this long in seconds (default 0.6)")
-    ap.add_argument("--margin", type=float, default=0.2, help="the padding: seconds of silence to keep on each side of speech (default 0.2; 0.15 before 2.22)")
+    ap.add_argument("--threshold", type=float, default=-35.0, help="silence level in dBFS (default -35; use -40 to -45 for quiet rooms)")
+    ap.add_argument("--min-silence", "--min-duration", type=float, default=0.6, help="the min duration of a pause: only remove gaps at least this long in seconds (default 0.6)")
+    ap.add_argument("--margin", "--padding", type=float, default=0.2, help="the padding: seconds of silence to keep on each side of speech (default 0.2; 0.15 before 2.22)")
     ap.add_argument("--margin-lead", type=float, default=None, metavar="SECONDS",
                     help="seconds of silence to keep before speech starts, when it should differ from --margin "
                          "(default: --margin)")
@@ -657,7 +657,7 @@ def main() -> int:
                           "means --threshold, --min-silence or the filler list is catching speech. --list and "
                           "--filler-list report them without the limit")
     ap.set_defaults(crf=18)  # --quality's default (the --crf alias was removed in 2.0)
-    ap.add_argument("--preset", default="medium", choices=X264_PRESETS)
+    ap.add_argument("--preset", default="medium", choices=X264_PRESETS, help="x264 preset")
     add_common(ap)
     args = ap.parse_args()
     apply_common(args)

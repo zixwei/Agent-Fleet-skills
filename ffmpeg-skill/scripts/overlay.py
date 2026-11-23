@@ -325,10 +325,10 @@ def main() -> int:
     txt = ap.add_argument_group("text options")
     txt.add_argument("--font", default="DejaVu Sans", help="fontconfig font name")
     txt.add_argument("--font-file", help="explicit .ttf/.otf/.ttc path (use this for CJK fonts)")
-    txt.add_argument("--font-size", type=int, default=42)
-    txt.add_argument("--font-color", default="white")
+    txt.add_argument("--font-size", type=int, default=42, help="text size in px, 1..2000 (default 42)")
+    txt.add_argument("--font-color", default="white", help="text colour (default white)")
     txt.add_argument("--border", type=int, default=2, help="text outline width (default 2)")
-    txt.add_argument("--border-color", default="black")
+    txt.add_argument("--border-color", default="black", help="text outline colour (default black)")
     txt.add_argument("--box", action="store_true", help="draw a translucent box behind the text")
     emo = ap.add_argument_group("emoji (1.15)")
     emo.add_argument("--emoji", choices=["auto", "color", "png", "mono", "none"], default="auto",
@@ -339,10 +339,10 @@ def main() -> int:
                                                            "(used by caption.py/graphics.py; overlay.py has no PNG route)")
     emo.add_argument("--emoji-scale", type=float, default=1.0, help="emoji box as a multiple of the font size")
     emo.add_argument("--emoji-max", type=int, default=60, help="most emoji overlays one run may build")
-    txt.add_argument("--box-color", default="black@0.5")
+    txt.add_argument("--box-color", default="black@0.5", help="colour of the --box behind the text, optionally @alpha (default black@0.5)")
     enc = ap.add_argument_group("encoding")
     enc.set_defaults(crf=18)  # --quality's default (the --crf alias was removed in 2.0)
-    enc.add_argument("--preset", default="medium", choices=X264_PRESETS)
+    enc.add_argument("--preset", default="medium", choices=X264_PRESETS, help="x264 preset")
     add_alpha_args(ap)
     add_common(ap)
     args = ap.parse_args()
@@ -464,12 +464,8 @@ def main() -> int:
         # verified: true; --place already refuses the same case
         die(f"--start {start:g} is at or after the end of the video ({main_len:.3f} s): nothing would be drawn",
             hint="give a --start inside the clip")
-    if not 0 <= args.opacity <= 1:
-        die("--opacity must be within 0..1")
     # A190: a size of 0 or below drew nothing (--font-size -10 completed, verified: true, with no
     # text in the picture; --scale -1 is ffmpeg's "keep the size") and a negative fade was no fade
-    if args.font_size < 1:
-        die(f"--font-size must be at least 1 px, got {args.font_size}")
     if args.scale is not None and args.scale < 1:
         die(f"--scale must be a positive width in px, got {args.scale}")
     if args.scale_percent is not None and args.scale_percent <= 0:
@@ -487,8 +483,6 @@ def main() -> int:
     validate_color(args.box_color, "--box-color")
     if not 0 < args.chromakey_similarity <= 1:
         die("--chromakey-similarity must be within (0, 1]")
-    if not 0 <= args.chromakey_blend <= 1:
-        die("--chromakey-blend must be within 0..1")
     if args.place and not args.video:
         die("--place needs --video")
     if args.place and (args.start or args.end or args.fade):

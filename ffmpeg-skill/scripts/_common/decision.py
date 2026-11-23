@@ -9,16 +9,15 @@ from __future__ import annotations
 import math
 import os
 import re
-import argparse
 from fractions import Fraction
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Dict, List, Optional, Sequence, Tuple
-from _common.color import (as_limited, bt709_label_filter, bt709_matrix_args, bt709_matrix_filter, bt709_tag_args, drawn_stream_format,
+from _common.color import (as_limited, bt709_label_filter, bt709_line_filter, bt709_matrix_args, bt709_matrix_filter, bt709_tag_args, drawn_stream_format,
                            hdr_line_matrix, hdr_rgb_matrix_args, hdr_rgb_matrix_filter, is_neutral_color, limited_range_filter, rgb_island, rgb_to_bt709_filter, _sdr_bt709)
 from _common.alpha import rgb_to_bt709_line
 from _common.emit import die, input_length, note, record_fallback, refuse, warn
 from _common.runner import absent_word, file_arg, read_json
-from _common.probe import AUDIO_MEDIA_EXT
+from _common.probe import AUDIO_MEDIA_EXT, display_size
 from _common.runner import CODECS, STATE, ffmpeg_encoders, ffmpeg_list_error, ffmpeg_version, hw_platform_reason
 
 
@@ -63,9 +62,22 @@ def pad_filters(out_w: int, out_h: int, fill: str, color: str, blur: int, darken
                    f"boxblur={radius}:2:{chroma}:2" + (f",eq=brightness=-{darken:g}" if darken else "")) + "[__fitbgb];"
                 f"[__fitfg]scale={out_w}:{out_h}:force_original_aspect_ratio=decrease[__fitfgs];"
                 f"[__fitbgb][__fitfgs]overlay=(W-w)/2:(H-h)/2:format=auto")
+    # a picture of another shape is mostly bars in this frame (a 9:16 clip in 16:9 fills 32%): the
+    # file is what the frame asks for, and the caller may not have asked for that frame's shape
+    if meta is not None and not blank and all(d := display_size(meta.get("video"))) and (part := min(out_w / d[0], out_h / d[1]) ** 2 * d[0] * d[1] / (out_w * out_h)) < 0.5:
+        warn(f"the picture fills {part:.0%} of the {out_w}x{out_h} frame and the rest is bars: the source is {d[0]}x{d[1]}, another shape. --fit crop fills the frame; a frame of the source's shape keeps all of it (export.py: reels, shorts and tiktok are 9:16, youtube and facebook 16:9)", "picture_small_in_frame", fraction=round(part, 3), source=f"{d[0]}x{d[1]}", frame=f"{out_w}x{out_h}")
     pad = f"pad={out_w}:{out_h}:(ow-iw)/2:(oh-ih)/2:color="
     return (f"scale={out_w}:{out_h}:force_original_aspect_ratio=decrease,"
             + (pad + color if meta is None else drawn_chain(pad + color, meta, [color], pad + "black", tag="pad")))
+
+
+def warn_mostly_cropped(video: Optional[Dict[str, Any]], out_w: int, out_h: int) -> None:
+    """A crop to another shape that keeps less than half of the picture says so (#688), as a pad
+    that leaves the picture small does (picture_small_in_frame): a 1920x1080 clip cropped to 9:16
+    keeps the centre 32% of it. A warning only: a vertical crop of landscape footage is the usual
+    way to make a Short, and the file is what was asked for."""
+    if all(d := display_size(video)) and out_w and out_h and (part := min(out_w * d[1] / (out_h * d[0]), out_h * d[0] / (out_w * d[1]))) < 0.5:
+        warn(f"the crop keeps {part:.0%} of the picture: the source is {d[0]}x{d[1]} and the frame {out_w}x{out_h}, another shape. --fit pad keeps all of it with bars, --fit blur over a blurred copy", "picture_mostly_cropped", fraction=round(part, 3), source=f"{d[0]}x{d[1]}", frame=f"{out_w}x{out_h}")
 
 
 def add_pad_fill_args(parser: "argparse.ArgumentParser") -> None:
@@ -100,6 +112,13 @@ def aspect_ratio(value: Any) -> Optional[Fraction]:
 def _even(n: float) -> int:
     v = int(round(n))
     return v if v % 2 == 0 else v + 1
+
+
+# A frame larger than the picture is enlarged with Lanczos in place of swscale's default bicubic:
+# fewer soft edges where a 720p clip is delivered at 1080x1920. Nothing is added when the frame is
+# the picture's size or smaller, so those commands are the ones they were.
+def enlarge_args(meta: Optional[Dict[str, Any]], w: Optional[int], h: Optional[int]) -> List[str]:
+    return ["-sws_flags", "lanczos"] if w and h and all(d := display_size((meta or {}).get("video"))) and (w > d[0] or h > d[1]) else []
 
 
 def frame_size(ratio: Optional[Fraction], width: Optional[int], height: Optional[int],
@@ -495,6 +514,13 @@ def frame_durations(meta: Optional[Dict[str, Any]], rate: float) -> str:
     return f"fps={rate:.6f}"
 
 
+# a time written in milliseconds is the frame it reads back to (#653): the nearest frame when that
+# is within half a millisecond either way, never one before the first; any other time is itself.
+# For a position the caller names (a cut point, --at, a segment bound), not for a length
+def on_frame(t: float, v0: float, rate: float) -> float:
+    return g if rate and (n := round((t - v0) * rate)) >= 0 and abs((g := v0 + n / rate) - t) <= 0.0005 else t
+
+
 def grid_at_or_after(t: float, v0: float, rate: float) -> float:
     """The time of the first frame at or after `t` on a constant-rate grid starting at `v0`."""
     if not rate:
@@ -699,7 +725,11 @@ def cfr_args(meta: Optional[Dict[str, Any]], fps: Optional[float] = None) -> Lis
         return []
     rate = fps or v.get("fps") or 30.0
     rate = round(rate) if abs(rate - round(rate)) < 0.02 else rate
-    return ["-fps_mode", "cfr", "-r", f"{rate:g}"]
+    # a rate the caller asked for relabels the start timecode, counted at the new rate (#470:
+    # proxy/denoise/crop/redact/sphere/straighten --fps 50 kept 01:00:00:12, a 25 fps label)
+    from _common.timeline import output_timecode_args
+    relabel = output_timecode_args(meta, 0.0, rate) if fps and v.get("fps") and abs(float(fps) - float(v["fps"])) > 0.01 else []
+    return ["-fps_mode", "cfr", "-r", f"{rate:g}"] + relabel
 
 
 def cfr_filter(meta: Optional[Dict[str, Any]], fps: Optional[float] = None, seek: float = 0.0) -> str:
@@ -726,10 +756,11 @@ def cfr_filter(meta: Optional[Dict[str, Any]], fps: Optional[float] = None, seek
     args = cfr_args(meta, fps)
     if not args:
         return ""
+    rate = args[args.index("-r") + 1]
     if seek > 0:
-        return (f"setpts=PTS-{seek:.6f}/TB,fps={args[-1]}:start_time=0,"
+        return (f"setpts=PTS-{seek:.6f}/TB,fps={rate}:start_time=0,"
                 f"settb=AVTB,setpts=PTS+{seek:.6f}/TB")
-    return f"fps={args[-1]}"
+    return f"fps={rate}"
 
 
 def with_cfr(chain: str, meta: Optional[Dict[str, Any]], fps: Optional[float] = None) -> str:
@@ -1023,6 +1054,13 @@ def restate_last_swap(before: List[str], after: List[str]) -> None:
         STATE.hw_swaps[-1] = (list(after), strip_movflags(STATE.hw_swaps[-1][1]))
 
 
+def hdr_tag_args(meta: Optional[Dict[str, Any]]) -> List[str]:
+    """The colour tags a 10-bit line that keeps a BT.2020 / HDR source writes as output options: the
+    matrix it converted with (hdr_line_matrix), and the source's primaries and transfer."""
+    v = (meta or {}).get("video") or {}
+    return ["-colorspace", hdr_line_matrix(v), "-color_primaries", v.get("color_primaries") or "bt2020", "-color_trc", source_transfer(v)]
+
+
 def encoder_args(codec: str, crf: int, preset: str, meta: Optional[Dict[str, Any]] = None, keep_bt709: bool = True) -> List[str]:
     """encoder options for `codec` (_cpu_encoder_args), on VideoToolbox when --hw asks and it can."""
     return _maybe_hw(codec, crf, meta, keep_bt709, _cpu_encoder_args(codec, crf, preset, meta, keep_bt709))
@@ -1041,7 +1079,7 @@ def _cpu_encoder_args(codec: str, crf: int, preset: str, meta: Optional[Dict[str
     cs = hdr_line_matrix(v)
     prim = v.get("color_primaries") or "bt2020"
     trc = source_transfer(v)
-    hdr_tags = ["-colorspace", cs, "-color_primaries", prim, "-color_trc", trc]
+    hdr_tags = hdr_tag_args(meta)
     if codec == "h264":
         if hdr:
             die(f"--codec h264 cannot carry HDR ({v.get('hdr_format') or 'BT.2020'}): 8-bit H.264 is SDR only",
@@ -1198,7 +1236,7 @@ def video_args(meta: Optional[Dict[str, Any]], crf: int = 18, preset: str = "med
     fix = bt709_matrix_args(meta if source is None else source) if convert_matrix and not keeps_source_tags() else []
     if convert_matrix and source is None and STATE.alpha_line is None:
         # the BT.2020 / HDR line of an RGB source (--codec prores included: that line tags it too)
-        fix = hdr_rgb_matrix_args(meta) or fix
+        fix = hdr_rgb_matrix_args(meta) or ([] if v.get("bt2020_or_hdr") else fix)
     if STATE.codec:
         return encoder_args(STATE.codec, crf, preset, meta) + fix
     if not v.get("bt2020_or_hdr"):
@@ -1214,7 +1252,8 @@ def line_matrix_filter(meta: Optional[Dict[str, Any]]) -> Optional[str]:
     SDR source on --codec prores."""
     if STATE.alpha_line is not None:
         return None
-    return hdr_rgb_matrix_filter(meta) or (None if keeps_source_tags() else bt709_matrix_filter(meta))
+    hdr = ((meta or {}).get("video") or {}).get("bt2020_or_hdr")
+    return hdr_rgb_matrix_filter(meta) or (None if keeps_source_tags() or hdr else bt709_matrix_filter(meta))
 
 
 def matrix_chain(meta: Optional[Dict[str, Any]], line_meta: Optional[Dict[str, Any]]) -> str:
@@ -1229,7 +1268,7 @@ def matrix_chain(meta: Optional[Dict[str, Any]], line_meta: Optional[Dict[str, A
         return f + "," if f else ""
     if keeps_source_tags() or ((line_meta or {}).get("video") or {}).get("bt2020_or_hdr"):
         return ""
-    f = bt709_matrix_filter(meta)
+    f = bt709_line_filter(meta)
     return f + "," if f else ""
 
 
