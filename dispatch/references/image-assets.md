@@ -1,0 +1,182 @@
+# 出图素材：提示词、背景、格子模板和代码作品里的做法
+
+图像模块的流程和规则在 `references/image.md`，先读那一篇；这里是写图像任务说明时要用的提示词、背景、格子模板、用在代码作品里的整套做法和改图。`assets` 子命令的参数见 `references/assets-cli.md`。节号沿用旧版（第零节移到了 image.md，第八节移到了 assets-cli.md）。
+
+## 一、工具的四个参数
+Codex 内置的 `image_gen`（exec 里写作 `tools.image_gen__imagegen`）有四个参数：
+
+| 参数 | 用途 |
+|---|---|
+| `prompt` | 提示词，用英文写 |
+| `transparent_background` | `true` 时输出带透明通道的 PNG |
+| `referenced_image_paths` | 本地图片的绝对路径列表，作为改图或参考的输入；提示词里按顺序称作 "Image 1"、"Image 2" |
+| `num_last_images_to_include` | 取对话里最近的 1–5 张图作为输入，只在图没有本地文件时用 |
+
+- 不传后两个参数就是全新出图。Codex 先用 view_image 看过图也不算传入。
+- 后两个参数不能同时传。格子模板和角色设定图都是本地文件，一起放进 `referenced_image_paths`。
+- 没有尺寸参数。输出固定在约 157 万像素的几档：1:1 是 1254×1254，3:2 是 1536×1024，2:3 是 1024×1536，3:1 是 2172×724。提示词里写更大的尺寸也没用。
+- 参考图会随调用上传给模型服务。
+- 结果里的 `image_calls` 列出每次调用实际传的参数，`referenced_image_paths` 为 `"unknown"` 表示 Codex 用变量传的、解析不出路径，或者几次调用分不清各自对应哪张图；`status` 为 `"not_run"` 表示代码里写了这次调用但没执行到。
+
+## 二、背景怎么选
+| 方案 | 什么时候用 | 注意 |
+|---|---|---|
+| `transparent_background: true` | 默认 | 透明是后期抠的：实心像素是 253–254，边外有 2–7% 的淡光晕。`assets cut` 默认（`--matte hard`）把 alpha < 48 归 0、≥ 250 归 255；头发丝、烟雾、光晕这类柔边素材用 `--matte soft` |
+| 品红 #FF00FF 纯色底 | 透明结果光晕太重，或主体大面积是白色、浅色 | `transparent_background: false`；主体里不能有品红、粉、紫；`assets cut` 自动识别底色并反求边缘 |
+| 绿幕、白底 | 不用 | 绿幕会把主体颜色带偏；白底抠不掉被描边包住的内部白色 |
+
+## 三、提示词积木
+按"用途 → 画幅 → 内容清单 → 风格 → 背景 → 间距 → 禁止项"的顺序写，英文。
+
+透明背景：
+```text
+Background: fully transparent everywhere outside the artwork (alpha = 0). No backdrop color, no floor, no cast shadow, no reflection, no glow.
+```
+品红底：
+```text
+Background: one perfectly flat, uniform pure magenta color (#FF00FF) filling the entire canvas. No gradient, no vignette, no texture, no floor, no cast shadow, no reflection, no glow. Never use magenta, pink, purple or violet anywhere inside the artwork.
+```
+间距（多部件必带）：
+```text
+Spacing: every item is fully separated by a wide empty gap; nothing touches another item or the canvas edge; nothing is cut off.
+```
+方便矢量化的风格（写在生成时；事后让模型"改成扁平风"几乎没效果）：
+```text
+Style: flat vector illustration, solid color fills with hard crisp edges, bold uniform dark outline (#222222). No gradients, no soft shading, no highlights, no texture, no noise, no 3D, no drop shadows, no glow.
+Palette: use only these colors: #222222, #FFFFFF, #F5A524, #1D5B79, #E9C25A.
+```
+人物这类复杂画面把第一句换成 "clean anime cel shading as flat vector art: solid fills, exactly one hard-edged shadow tone per color"。
+禁止项：
+```text
+No text, no letters, no numbers, no labels, no grid lines, no frames, no watermark.
+```
+要循环平移的背景层（远山、云带、地面）写成能左右无缝接上的条带，不要事后用"原图 + 水平镜像"拼：镜像的对称一眼能认出来。
+```text
+Tiling: this is a horizontally repeating strip. The left and right edges must continue into each other seamlessly (the same height and shapes at both edges), so copies placed side by side show no seam. Do not make it mirror-symmetric.
+```
+
+## 四、多部件：用格子模板命名
+模型大多按列出的顺序排部件，但不保证。要按名字引用部件，就用格子模板：
+1. `assets template --out <项目内路径>/layout.png --cols 4 --rows 2 --names "head,hair-back,…"`，同时写出 `layout.slots.json`。模板要放在项目里，Codex 的沙箱才读得到。
+2. 把模板作为 Image 1 传入（有角色设定图就作为 Image 2）：
+```text
+Image 1 is a layout template: 8 numbered dashed slots in two rows. Image 2 is the character design sheet.
+Draw <内容> as SEPARATE parts. Put exactly one part centered inside each slot of Image 1, fitting inside the slot:
+slot 1: <部件 1>
+slot 2: <部件 2>
+...
+Do NOT draw the dashed slot outlines or the slot numbers.
+<风格、背景、禁止项>
+```
+3. `assets cut --image <图> --out <目录> --slots layout.slots.json`：部件按中心落在哪一格命名；同一格里分开的碎片（太阳的光芒、云下的雨滴）合并成一个部件。
+
+名字用稳定的英文 id（文件名就是它），说明"左右"指角色自己的左右还是画面的左右。一张图里格子越多每件越小：12 格时每件约 250 像素宽。
+
+## 五、先出整图还是直接出部件表
+- **直接出部件表**：彼此独立、不用组装的素材，比如图标组、按钮和徽章、道具。
+- **先出整图、验收后再拆**：要保持同一个设计的。代码作品里的角色和场景按第六节从定稿图同源取件，不让模型拆。整页 UI 拆组件、一个角色配套的几件道具这类各自单独使用的素材，把整图作为参考图传入，另出一张部件表，提示词写明必须保留的细节。实测带参考图出部件能保留帽子、发夹、披肩这类细节，纯文字描述会丢。
+- 嵌在组件里的小图标（导航栏里的图标）单独列一格或单独出一张，不要指望从整页里再拆一层。
+- 扩充现有素材集：把现有的一组作为参考图，要求 "exactly the same drawing style, outline weight, corner rounding, level of detail, proportions and palette as Image 1"，并写 "Do not copy any item from Image 1"。
+
+## 六、用在 SVG、HTML 和动画里
+总则：要相接的两块像素必须来自同一张图，或者一侧是代码画的。所以 Codex 出图时只画整张画面，不画单个部件；作品里的每个部件都从同一张定稿图上取：整块动的由 Claude 在本机裁出，会弯的交给 Codex 照定稿图手画成路径（第 6 步）。Codex 只出四种图：定稿图；在定稿图上改出的背景板和局部变体；不在定稿图里的独立素材（图标、道具、贴图组用第四节的格子模板命名，能左右接上的循环条带，本身就是交付物的位图）。
+
+1. **列部件清单**：每个看得见的部件写明怎么动（不动、整块平移或转动、弯曲）、和谁相接、接缝被什么盖住、要不要和代码画的东西接触，据此定怎么取：
+   - 整块动的（头、不弯的身体、道具）和静止的前景遮挡物（柜台）：从定稿图按原位置裁成 PNG；
+   - 会弯、要和代码画的东西精确接触的（手臂连同袖子、腿、尾巴、翅膀）：交给 Codex 照定稿图描成路径，用骨骼权重变形，接触点用 IK 算（第 6 步）；
+   - 物理、机械、文字、UI、光效：代码画。
+
+   接缝放在定稿图里已有的遮挡物边上（衣服的带子、领口、袖口、柜台）；跟着动的衣物和配件（袖子、裤脚、手套）和会动的部件归在一起；脸和表情留在整块的头上，表情一律走第 5 步的补丁，不描。动手前用一两句话告诉用户哪些部件整块动、哪些交给 Codex 描成路径弯曲、哪些代码画。
+2. **出定稿图**：整个角色或整幅画面，构图取最终画面的构图。提示词按下面的模板写，每一条都从第 1 步的部件清单推出来，写成画面上的要求；不要在提示词里写部件名单、拆分方法，也不要写 puppet、parts、joint、pivot、separate 这类词，模型会画成部件表或带断面的关节。用户看过、认可后才往下做；用户配置的 `dispatch.confirm.image` 为 `"auto"` 时不等认可，由 Claude 按第 9 步的重出门槛自己检查、在正文给用户看过后接着做（`references/image.md` 的"自动模式"）。
+```text
+<主体、动作和构图>
+Composition for animation:
+- <每个会动的部件> is fully visible and does not overlap <它附近要分开的部件>.            （第 1 步里会动的部件逐个写）
+- <接缝处的遮挡>, e.g. the collar covers the neck, the cuff wraps the wrist, <前面的物体> hides everything below the waist.
+- <每个会动的部件> is drawn in the middle of its motion: <中间姿势>.
+- <会动的部件> cast no shadow on other parts; no glow, light rays or sparkles cross between objects.
+- Do not draw <代码画的东西：热气、粒子、反光、文字、UI>; leave <要写字的地方> blank.
+Style: clean anime cel shading as flat vector art (按第三节的风格积木), bold outline of the same weight everywhere (<描边色>).
+Detail: the same level of detail everywhere: <头发、衣服等细节多的地方> drawn with a few large simple shapes, not many thin strands or fine lines. <要描成路径的部件> are flat colors with exactly one hard-edged shadow tone, no gradients.
+Palette: <色板>.
+<背景积木；整幅画面时不透明>
+No text, no letters, no numbers, no labels, no grid lines, no frames, no watermark.
+```
+3. **出背景板**：定稿图作 Image 1，不透明改图（`transparent_background: false`），用第七节的背景板写法把含有会动部件的主体整个去掉，补上后面的背景，画布不变。背景板只写回主体原来所在的范围，离主体远的地方有轻微变化也不影响。不要让模型单独取出某个部件，也不要让它补画角色身上被挡住的部分。
+4. **取件**：写部件清单 `pieces.json`（坐标都是定稿图的像素坐标），运行 `assets layers --ref <定稿图> --plate <背景板> --pieces <pieces.json> --out <目录>`：
+```json
+{ "pieces": [
+    { "name": "counter", "kind": "raster", "lasso": [[x, y], …], "whole": true },
+    { "name": "head", "kind": "raster", "lasso": [[x, y], …] },
+    { "name": "body", "kind": "raster", "lasso": [[x, y], …], "extendUnder": [{ "piece": "head", "dist": 12 }] }
+  ],
+  "seams": [[[x, y], …]],
+  "line": 20 }
+```
+   - `name`：只用字母、数字、`-` 和 `_`，不重名，不叫 `static`；它也是输出的文件名。
+   - `lasso`：圈出这个部件的多边形。部件范围 = 套索里面、和背景板不一样、被描边分开的区域，描边归离它最近的部件。套索按清单顺序先到先得：靠背景的一侧可以画宽，压着别的部件的那一段要贴着这个部件的外缘画。
+   - `whole`：套索里的像素全取，给静止的前景遮挡物用（它在背景板里也有）。
+   - `seams`：定稿图里没有描边、由 Claude 定的接缝（比如下巴和脖子同色相连），画成折线当描边用。`line`：描边的亮度上限（Lab 亮度，默认 20）；描边有断口、两个部件连成一块时调高。
+   - `extendUnder`：下层部件顺着平涂色往上层部件下面延长 `dist` 像素，取转动时会露出来的最大距离；延长段只铺在上层部件盖住的地方。
+   - `kind: "vector"`：这个部件再转成 SVG，只给扁平少色的部件用。SVG 用整张画布的坐标，所以清单里它的位置是整张画布，包围框另记在 `box`。
+
+   输出 `static.png`（定稿图，主体范围换成按外圈色差校过色的背景板）、每个部件的 PNG 或 SVG、`layers.json` 和 `layers.js`（`window.LAYERS`，每层在定稿图上的位置）、`check.png`。页面按 `layers.js` 的位置放部件，不缩放、不对齐；转动支点直接在定稿图坐标里量。
+
+   验收看 `check.png`：每个部件的颜色只盖在它自己身上，延长段颜色浅一些。品红框是拿不准的区域（`uncertain`），逐个看：框里是背景板在主体附近重画过的背景、部件上没有多出背景，就没事；部件缺了一块或带上了背景，先改套索、`seams`、`line`，原因在背景板（主体没去干净）时按第 9 步重出背景板。`reassembled_diff_px` 是部件（不含延长段）叠回静止层后和定稿图明显不同的像素数，1536×1024 的画面实测约 1,900–2,700，多出很多时看是哪里。
+5. **局部变体（眨眼、张嘴）**：定稿图作 Image 1，用第七节的局部修改写法只改那一处；再运行 `assets patch --base <定稿图> --variant <改图> --out <目录>`：它先把改图对回定稿图（拿不准时按原位），去掉轮廓的细微位移和外轮廓一圈的变化，只留成片的改动，羽化后写出补丁 `patch.png`（和定稿图同一画布）、叠好的 `preview.png` 和对照图。知道要取哪一块时加 `--keep <区域>`。补丁叠在它所属的部件上，跟着部件一起动。不要整张换图：实测整张换图时，眼睛以外整颗头的轮廓一起位移约 1 像素，实际尺寸下有 6,000 多个像素在跳；只叠眼睛补丁时，变化只剩眼睛里的几百个像素。
+6. **会弯的部件交给 Codex 手画**：建 draw 格子的计划（路线 ②，`plan --module image --cell draw --route 2 …`），用 `image --plan … --seat … --scope <它的输出目录>` 派出，Claude 写任务说明并验收。
+   - **Claude 先准备好**：第 4 步取件时把会弯的部件也列进清单（`kind: "raster"`），裁出的 PNG 只给 Codex 当描图参考；页面框架由 Claude 写好，包括静止层、整块部件、代码画的东西、层级、`?t=` / `?rest` / `?capture` 参数，并按动作公式算好每个关节每一刻的角度，留一个空接口给 Codex 实现，比如 `buildRig({ <各层的 <g>> }) → { arm(aU, aF, aH), tail(t, amp) }`；转轴写进单独的文件（定稿图坐标）。
+   - **任务说明写明**：
+     - 范围：只写它自己的 rig 文件和工作目录；
+     - 输入在哪；
+     - 接口和每个角度的含义（全为 0 就是定稿图的姿势）；
+     - 部件必须是照定稿图描的 `<path>`，不能嵌 PNG，不能用 `<image>`、滤镜或遮罩；
+     - 静止姿势和定稿图一样：轮廓、描边粗细、底色和阴影；
+     - 接缝要求：靠遮挡物的一端不动，接缝处不露背景，描边粗细不突变；
+     - 只用原生 SVG 和普通 JavaScript；
+     - 可用的命令：`assets trace`、`capture`、`playback`；
+     - 自查：截 `?rest` 和每个动作的两端，看各个接缝的 2 倍特写，跑一圈播放；
+     - 报告：用了哪些种子点和参数、权重怎么设的、剩下的问题。
+   - **做法要点**（写进说明，或者让它读这一步）：
+     - 描图：`assets trace --image <定稿图> --seed <部件填色里的一点> --box <部件周围的矩形> --out <目录>` 从种子点圈出部件，分成描边、底色和阴影（`--colors` 定几种填色），输出定稿图坐标的 `trace.svg`（每层一个 `<path>`，轮廓是曲线，内部细线是填色里的洞）和对照图；颜色不止一种的部件每种颜色放一个种子点；描出来的线宽、配色和裁出的部件同源，不用换算。
+     - 变形：关节两侧共用一个权重场，靠接缝的一端钉在不动的部件上（尾根这类固定端留一段钉住带，再逐渐接入弯曲）；变形前把长曲线细分，免得一段曲线的控制柄跨过关节，被扯出尖角。
+     - 画法：先画所有描边、再画所有填色，关节处的填色盖住内侧描边；和整块部件相接的一端伸到它下面。
+   - **验收由 Claude 自己做，不采信它的自查结论**：
+     - 看 diff，只许改了它自己的文件，也查一下有没有写到工作区外；
+     - 截 `?rest`，在部件范围里和定稿图比：试片两份手画的平均 RGB 差约 4，直接贴裁出的 PNG 是 0.3；
+     - 看各个接缝在动作两端的 2 倍特写；
+     - 跑 `assets playback`：闪动、首尾差、跳帧都要为 0；
+     - 最后亲眼看播放。
+     - 不合格就按 `references/acceptance.md` 的"返工"用 `resume --reason rework` 返工一次（不写 `--level`），在返工说明里写清楚哪里不对；还不对就由 Claude 接手。
+7. **转不转 SVG**：扁平少色的素材 `assets cut --vector` 转 SVG，生成时写扁平风格、少阴影，细节多、颜色杂的素材矢量化时加 `--colors 8` 到 `12`，路径数能降到原来的四分之一以下（本来就扁平的图标几乎不变）；要固定配色时用 `--palette … --snap`。角色、带渐变或细节多的画保留 PNG，用 `<image>` 嵌进 SVG 或页面：动漫角色不减色时每件几十到五百条路径，网页上会卡，减色又会出色带。这是路线 ①、② 的做法；用户选了路线 ③ 或 ④ 时成品只能是路径，不能这样交付。
+8. **组装和检查**：页面要支持 `?t=<秒>` 停在某一时刻（截图和检查都靠它）。装好后用 `assets capture --url <页面> --times <秒,…> --size <显示尺寸> --zoom <名字=接缝处的矩形;…> --out <目录>` 按实际显示尺寸截几个关键时刻（动作的两端、遮挡切换、变体出现时），加 2 倍特写，看接缝、脱节和线宽。动画再用 `assets playback --url <页面> --loop <一圈的秒数> --static <不该动的区域;…> --out <目录>` 截下一圈：`static` 里不该动的区域有变化就是闪，`seam` 不为 0 就是首尾接不上，`jumps` 列出突然跳一下的时刻；把 `playback.png`（APNG，浏览器里直接播放）给用户看。截图要用本机的 Chrome 或 Edge，找不到时用 `--browser` 指定。动画交付前最好再请没参与制作的模型做一次视觉检查：`review --target visual --file <截图或 playback.png> …`，审查说明里写清要看什么（接缝、闪动、首尾衔接、线宽）；只有能看图的协作方能接（目前是 Codex）。
+9. **重出门槛**：下面任一条成立，就改做法重出那张图，不在下游修补。
+   - 定稿图：会动的部件被别的部件压住、中间没有描边或遮挡物隔开，或者接缝不在遮挡物边上。改提示词重出，用户重新认可（自动模式下由 Claude 重新检查，见 `references/image.md` 的"自动模式"）。
+   - 背景板：`layers.json` 里 `plate.measured`（测出的对齐，不管最后是不是按原位用的，也不管 `ambiguous`）的 `offset` 超过 3 像素或 `scale` 偏离 1 超过 1%，说明整张被挪动、重画了（实测合格的背景板偏移 0.1–0.7 像素，缩放偏离不到 0.1%）；`plate.noise`（主体以外背景板和定稿图的典型色差，实测 1.4–1.6）超过 3；`static.png` 里还看得到主体的残影。重出时在提示词里点名残留的东西。
+   - 局部变体：`patch.json` 里 `align.measured` 的 `offset` 超过 3 像素或 `scale` 偏离 1 超过 1%（实测合格的改图偏移 0.6–0.8 像素）；补丁范围 `box` 明显超出要改的地方。重出时把改动范围写得更窄。
+   - 动起来以后：2 倍特写里接缝错开超过约 3 像素、线宽突变，不是出图的问题。部件同源，本来是对齐的，要改变形代码（支点、权重、位置），不放大手画部分去盖：Codex 写的按第 6 步返工。
+   - 自带命令报"拿不准"时按上面几条处理，不另写配准或拟合脚本绕过去。同一个问题连续三次重出都没有改善时停下，交给用户决定（`references/image.md` 第 13 条的返工规则）。
+10. **为什么这样分**（2026 年 10 月试片）：
+   - 让模型画关节部件表、按引导图出逐帧、分两次出图再拼：关节转轴、和代码画的东西的接触点、两半之间的接缝都对不准，偏差动辄是部件长度的几成；逐帧里 8 帧有 6 帧接触点偏了。
+   - 从参考图单独取出透明底部件：头被放大 1.86–2.06 倍、身体 1.4–1.59 倍，有的比例和颜色被重画；`align` 对大块平涂的部件偏向缩小，给不出可信结果；让模型"去掉手臂""去掉袖子再收边"，4 次都没照做，袖口被重画成带内沿的开口、低了约 50 像素。
+   - 不透明的整张改图能保住位置：背景板远离主体的地方 99.6% 不变；单独出的柜台层偏了约 15 像素，从背景板裁出来的逐像素一致。
+   - 同源取件试片：只出背景板和闭眼两张图，头、身体、柜台和定稿图逐像素一致，裁出的和描出的描边都是 3 像素，播放没有闪动、首尾差为 0。
+   - 手画对照：同一套输入、同一个页面框架和动作公式，挥手的手臂连袖子和尾巴分别由 Codex（gpt-6.1-sol，effort max）和 Claude 各自独立手画。指标打平：静止姿势平均差 4.07 对 4.03，接缝露出背景都是 0，播放检查都是 0。盲看时用户判 Codex 那份更自然。它多做了几处：变形前细分曲线、肘部斜向过渡、尾根钉住带、皮肤用渐变。代价是 26 分钟和较多 token。它第一轮把中文路径写成百分号编码，写到了工作区外，所以验收要查这一点。
+   - 定稿图模板：头发的细节和渐变明显减少，要描的尾尖从渐变绒毛变成平涂，出图和描出部分的细节差距缩小约六成。
+
+## 七、改图和分层
+- **局部修改**：原图作为 Image 1，提示词写 "Change ONLY <目标和位置>: <怎么改>. Keep every other part exactly unchanged: same parts, same positions, same sizes, same colors, same line art, and the same background."。改图会让其他区域有轻微变化（实测平均色差 2–3），用 `assets diff --before 原图 --after 新图 --slots 模板` 确认只有目标格变了，交付时只替换那个部件。
+- **背景板**：定稿图作为 Image 1，`transparent_background: false`，写 "Remove <主体> completely and fill that area with the background that would be behind them … Change nothing else: same canvas size, same composition and framing"。主体投在地面上的阴影写明留下还是去掉：留下就是静止层的一部分，去掉就把它当作一个部件取出。不要用透明底让模型"只保留主体"来取主体层：取出来的会被放大、重画（第六节第 10 步）。
+- **给现成图去背景**：原图作为 Image 1，"Remove only the background and make it fully transparent. Keep <主体> exactly as they are … Do not redraw or restyle anything."
+- 连续多轮改同一张图会累积变化，改了两三轮后从源图重新出。
+
+## 九、做不到或没验证的
+- 像素风、精确像素尺寸、超出约 157 万像素的高清图。
+- 让模型画关节部件、单独的部件或逐帧动作：见第六节，实测对不准。
+- 大幅转身、换视角：需要定稿图里没有的那一面，同源取件做不到。
+- 背景板和局部变体只按等比缩放和平移对回定稿图，不处理旋转；被模型转了角度时对不准，要重出。
+- `assets layers` 靠和背景板的差别认出主体：主体和背后的背景同色、中间又没有描边的地方分不开，要用 `seams` 画出接缝。接缝下面延长的那一段只是顺着平涂色铺开，露出得多时显得平，转动幅度控制在 `extendUnder` 的距离以内；这一段只在两个试片里验证过。
+- 部件不带层级和遮挡顺序，要在代码里定：`assets cut` 的 manifest 和 `assets layers` 的 layers.json 里都没有。
+- 半透明素材（玻璃、烟雾）只能用 `--matte soft` 粗略处理，没有系统验证。
+- 自带描图碰到细节多的角色部件，1 像素宽的细线（发丝）会断成一串点，路径数也多：这也是角色保留 PNG 的原因之一。
+- 图层 SVG 导入 Figma、Illustrator 后的分组和可编辑性没有实际验证过。
