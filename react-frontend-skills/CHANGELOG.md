@@ -1,0 +1,296 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [4.0.0] - 2026-11-09
+
+The pack now teaches only the current major of each library. MCP package: 3.0.0.
+
+### Breaking
+
+- `scan` is removed, with its 35 deprecated-API checks, comment masking, `--skill` and `--all`. `detect` and `lint` remain. Running `scan` now exits 2 as an unknown command.
+- Deprecated and legacy content is removed from every skill: migration guides, "Incorrect (deprecated in vN)" examples, notes for older majors, deprecated aliases and version-history asides. Rules that taught a current API through its deprecated predecessor are rewritten to teach the current API only.
+- Deleted rules: `tailwind/build-node-version`, `tailwind/util-renamed-utilities`, `vitest/setup-vitest5-migration`. `zod/refine-vs-superrefine` is now `zod/refine-vs-check`. New current-only rules replace the useful parts: `tailwind/util-current-scale-names` (shadow/rounded/blur scales, `ring-3`, `outline-hidden`) and `vitest/setup-vitest5-semantics` (tailwind 42 rules, vitest 47).
+- `detect` no longer reads npm 6 (`lockfileVersion: 1`) lockfiles. Its older-major hint says the skills cover only the target major; upgrade before applying them.
+- The CLI entry point no longer exports `detect`, `lint` or `rangeMajor`; import them from `bin/detect.mjs` and `bin/lint.mjs`. The MCP `startStdioServer` returns `{ server }` and `SkillsCatalog` is no longer exported.
+
+### Changed
+
+- MSW: only `graphql` needs its own entry point (`msw/graphql`); `http`, `HttpResponse`, `ws` and `sse` import from `msw`. Async-validation forms re-check on submit, because the resolver result replaces a manual `setError`. TypeScript 7 setup keeps a TypeScript 6 alias for tools that load the compiler API.
+- Zod refinements use `.check()` instead of `superRefine`; shadcn and React Hook Form forms use `Controller` with `Field`/`FieldError` instead of the `Form`/`FormField` wrapper; MSW examples use `onUnhandledFrame`; nuqs and Next.js examples await `searchParams`; `useTransition` examples use `isPending`.
+- Next.js: new `server-async-params` rule (pages, layouts, route handlers, metadata routes, Client Components); Turbopack config lives under the top-level `turbopack` key.
+- TypeScript 7 rule is now "Configure tsconfig for TypeScript 7" and lists `downlevelIteration` and `module: "none"` among unsupported options.
+- MSW handler URL guidance scopes relative paths to browser/jsdom and uses an absolute URL or `*/path` in a pure Node test; Vitest and TDD examples follow it.
+- shadcn rules cover Base UI as well as Radix; the React 19 rule no longer claims `use()` replaces `useContext`; Tailwind dark mode uses `@custom-variant`; Lucide imports stay on the typed package entry; TDD uses MSW or an injected fake instead of replacing `global.fetch`.
+- Audit baseline re-checked on 2026-11-09 against Tailwind CSS 4.3.5, Playwright 1.65.0, MSW 3.0.4 and TanStack Query 5.107.1; Playwright 1.65 adds the sharded-run note to `perf-sharding`.
+- The CLI is split into `cli`, `detect`, `lint` and `packages` modules. npm-pack output parsing is shared by both smoke tests in `scripts/npm-pack.mjs`.
+- MCP search limits come from one pair of constants; the catalog no longer stores an unused per-skill file list or parses `SKILL.md` frontmatter twice.
+- `web-design-guidelines` has one procedure section instead of two copies.
+
+### Fixed
+
+- `detect --all`, `lint --skill`, and extra positional arguments fail with exit 2 instead of being silently ignored.
+- `lint` validates `SKILL.md` link fragments, including same-file `#anchor` links, with GitHub's slug rules for repeated, Unicode, linked and emphasized headings, ignoring fenced code. React section links point at the real `_sections.md` anchors.
+- The MCP SIGTERM test asserts the binary exits with code 0 and no signal, so dropping the shutdown handler fails it. A failed close sets exit code 1 before reporting, and reports to stderr by default.
+- `test:package` reads `lint --json` and derives the skill count.
+- The MCP catalog tests pin the repository skills directory and cover missing `SKILL.md` and unclosed frontmatter.
+- `.gitignore` excludes all `.claude/` agent tool state.
+
+## [3.0.1] - 2026-11-03
+
+### Fixed
+
+- `scan` comment masking ran in quadratic time on some hostile files: 400 KB of unclosed `/*` or `<!--` lines, or a long CSS line full of `//`, took 10 to 60 s. Every case now finishes in milliseconds.
+- `scan` skips one-line regex literals such as `/[//]/` (including after `return`, where `/[/*]/` used to hide code up to the next `*/`) and unquoted CSS `url(http://…)` as text instead of reading `//` inside them as a comment, and masks comments inside template `${…}` expressions.
+- `scan` reads versions from npm 6 (`lockfileVersion` 1) lockfiles, and no longer counts a check that a project config flag rules out (`cacheComponents`) as version-unknown.
+- tailwind `tw4-leading-important-modifier` finds `!utility` after doubly nested calls inside class helpers, such as `cn(getBase(foo(bar)), '!flex')`.
+- The MCP package smoke test packs into a temp directory, so it no longer deletes a tarball already in `mcp/`.
+- README: `scan` reads tracked and untracked, non-ignored files; with no install or lockfile entry, a range that pins one major decides the gate alone.
+- msw: MSW 3 needs Node.js 22.12+ in the troubleshooting table; the `.nvmrc` example uses `lts/jod`; `moduleResolution` `node16`/`nodenext` must be paired with the matching `module` value.
+- playwright: the CI artifact glob includes `.webp` screenshots; full cross-browser runs pass `--project="*"`, so projects with `default: false` run too.
+- tailwind `resp-custom-breakpoints`: canonicalization maps to names in the active theme, so `max-[64rem]` matches `max-lg` only with the default breakpoints.
+
+## [3.0.0] - 2026-11-03
+
+### Breaking
+
+- Both packages require Node.js 22 or newer (`engines` `>=22`, was `>=20`); Node 20 is end-of-life. The MCP package is released as 2.0.0 for the same reason. CI no longer runs Node 20.
+
+### Added
+
+- `scan` checks for four MSW 3 hard breaks (35 checks, up from 31):
+  - `msw3-graphql-root-import`: `graphql` imported from the `msw` root (3.0.3 still re-exports `http`, `HttpResponse`, `ws`, `sse` and the utilities there, so those are not flagged).
+  - `msw3-on-unhandled-request-renamed`: `onUnhandledRequest`, now `onUnhandledFrame`.
+  - `msw3-graphql-link-first`: `graphql.query/mutation/operation`, now `graphql.link(url).query()`.
+  - `msw3-connection-event-renamed`: the `connection` life-cycle event, now `websocket:connection`.
+- nextjs `route-ensure-static` (Next.js 16.4 `ensureStatic`), tailwind `build-turbopack-loader` (`@tailwindcss/turbopack`, 4.3.4), vitest `perf-since-last-run` (`--since-last-run`, `--last-failed`, 5.1).
+- `npm run test:package` packs the CLI, installs the tarball and runs it through `node_modules/.bin`. CI runs it on Node 22, 24 and 26, and on Windows and macOS.
+
+### Changed
+
+- msw targets MSW 3.0 (3.0.3): a version gate with a 2.x ↔ 3.x table, subpath entry points, link-first GraphQL, `onUnhandledFrame`, `await worker.stop()`, Node 22.12+, the `msw/vite` plugin and GraphQL subscriptions (51 rules, up from 48). Rules note the MSW 2.x form where it differs. `detect` now reports MSW 2 projects as `older-major`.
+- nextjs: Partial Prefetching and instant navigations are no longer described as 16.3 previews; `navigation()` and `prefetch()` from `next/cache`.
+- playwright 1.64: `Locator.within()`, `test.describe.configure({ lock })`, `--shuffle`, `default: false` projects, WebP screenshots.
+- vitest 5.1: interactive snapshot review.
+- MCP: `@modelcontextprotocol/sdk` ^1.32.2, `zod` ^4.6.7, `yaml` ^2.9.1; lockfile has no `npm audit` findings.
+- Audit baseline re-checked on 2026-11-03 against React 19.3.1, Next.js 16.4.5, Tailwind CSS 4.3.4, Vitest 5.1.0, Playwright 1.64.1, MSW 3.0.3, TanStack Query 5.105.3, React Hook Form 7.91.0, Zod 4.6.7 and nuqs 2.10.2. React, TanStack Query, React Hook Form, nuqs and Zod releases since the last baseline change no API the rules use. Zod 4.6.6 notes that six malicious commits pushed to `main` on 2026-09-21 were reverted and never published to npm; 4.6.7 is the release pinned here.
+
+### Fixed
+
+- `scan` reported the line of blank lines before a match (`cache-segment-config` was usually off by one or more).
+- `scan` flagged code behind a trailing `//` comment and inside block comments without a leading `*`; a commented-out `cacheComponents: true` enabled the segment-config check.
+- `detect` and `scan` read the first number of open ranges (`>=18`, `^18 || ^19`) as the major, giving a false `range-mismatch` and skipping checks; a versionless `npm:` alias read digits from the package name.
+- `latest`, `workspace:` and `catalog:` ranges without an install were reported as "installed major predates them".
+- Check gaps: `border-`, `divide-`, `ring-` and `placeholder-opacity-*`; a leading `!` inside `cn()`/`clsx()`/`cva()`; `z.string({ ... }).email()` and arguments with parentheses; `export { middleware }` and default exports in `middleware.ts`; `revalidateTag(getTag(x))`; `vi.hoisted<T>()`.
+- `lint` and the MCP catalog failed on CRLF frontmatter (the MCP served an empty description).
+- Both npm tarballs shipped untracked dot-directories under `skills/` (agent tool state).
+- The MCP package smoke test crashed on npm 12 (`npm pack --json` returns an object) and left the tarball behind; it now runs the server through `node`, which also works on Windows.
+- `scan` disables git's fsmonitor when listing files in the scanned project, and skips a directory named like a config file.
+- Import and export brace-list checks (nuqs, msw, react-hook-form, next middleware) backtracked for 10 s or more on a large file with an unclosed `{`; every check now finishes in under 200 ms on 500 KB of adversarial input. Line numbers are counted incrementally, so a file with many hits no longer re-splits per hit.
+- `scan` skips dot-directories in git work trees as it already did without git; root dotfiles such as `.postcssrc.json` are still scanned.
+
+## [2.3.0] - 2026-09-26
+
+### Added
+
+- `scan` checks for three Vitest 5 hard breaks (31 checks, up from 28):
+  - `vitest5-removed-entrypoints`: imports from `vitest/suite`, `runners`, `coverage`, `snapshot`, `reporters`, `environments` or `mocker`.
+  - `vitest5-nested-vi-mock`: `vi.mock`, `vi.unmock` or `vi.hoisted` below module top level, which fails the whole file.
+  - `vitest5-tothrow-empty-string`: `toThrow('')`, which now matches any message.
+
+### Fixed
+
+- vercel-react-best-practices `rendering-hydration-no-flicker`: the inline-script example adds `suppressHydrationWarning`. Without it, React 19 logs an attribute mismatch. Recorded as a local patch in `UPSTREAM.md`.
+
+## [2.2.0] - 2026-09-26
+
+### Added
+
+- Eight rules for the September 2026 releases:
+  - zod: `perf-compile-schemas` (`z.compile`, `z.withParser`) and `parse-validate-for-boolean-checks` (`.validate()`).
+  - vitest: `perf-bench-test-context`, the Vitest 5 `bench` fixture.
+  - react: `effect-use-browser-only`, React 19.3 `use(browser())`.
+  - playwright: `loc-frame-locator`.
+  - react-hook-form: `valid-trigger-should-touch` and `adv-opaque-types`.
+  - tanstack-query: `prefetch-infinite-query` (`queryClient.infiniteQuery`).
+
+### Changed
+
+- Zod 4.5/4.6: `.exactPartial()`, `z.iban()`, ISO datetimes that require seconds, code-point string lengths, lazily built error messages, numeric-enum `.options`.
+- Vitest 5:
+  - `vi.mock` only at top level.
+  - Inline projects inherit the root config.
+  - Reports under `.vitest/`.
+  - Removed entry points; `vite` is a peer dependency.
+  - No config lookup in parent directories.
+  - `toThrow('')` matches any message.
+  - `expect.poll` fails when its timeout expires.
+- React 19.3: the development warning for skipping `use()`, and transitions that commit independently. Next.js hydration and `next/dynamic` rules point to `use(browser())`.
+- Playwright 1.63: test locks for tests that share a resource, `locator.visible()`, aria snapshots in traces, step subtitles and params.
+- React Hook Form: built-in `<ErrorMessage>` (7.88) and `getErrors()` (7.86) replace the lodash `get` pattern.
+- TanStack Query: `mutate()` without variables (5.102).
+
+### Fixed
+
+- `perf-sharding`:
+  - The coverage merge lacked `--reporter=blob`.
+  - Nothing uploaded the shard blobs.
+  - It missed the `.vitest` hidden-directory flag.
+- `setup-restore-mocks`: the intro claimed restoring resets `vi.fn()` mocks.
+- `env-per-file-override`: the node project also ran component and hook tests.
+- `assert-specific-matchers`: suggested `toBeEmpty()`, which is not a Vitest matcher, and `expect.any(String)` as a plain matcher.
+- The `getFieldState` example did not compile.
+- TanStack snippets used `noop` without importing it.
+- `build-dynamic-imports` used `ssr: false` without `'use client'`.
+- The `useTransition` example claimed synchronous filtering was interruptible.
+- `useSyncExternalStore` resubscribed on every render.
+- Comments on Playwright workers and `trace: 'on-first-retry'` were misleading.
+- `LICENSE` names PyModel; the 2.1.0 tarball shipped the pre-rebrand notice.
+
+## [2.1.0] - 2026-09-26
+
+### Added
+
+- Added the separately publishable `@pymodel/react-frontend-skills-mcp` stdio server with read-only tools and resources for all skill documentation.
+- Added the zero-dependency `react-frontend-skills` CLI: `detect` (installed versions vs. each skill's target major), `scan` (deprecated/removed API usage mapped to rule IDs), and `lint` (skill frontmatter, indexes, links, rule counts, scan-rule integrity). `npm test` runs it.
+- CI workflow: `npm test` and the MCP check on Node 20 and 24 for every push to `main` and every pull request.
+- `UPSTREAM.md`: the three Vercel-sourced skills, their upstream commits, the seven local rule patches, and the sync procedure.
+
+### Changed
+
+- Cut every skill description to one line of at most 8 words, led by the library and major version. Across all 18 skills: 1,342 → 251 resident tokens, 677 → 113 words, 124 → 3 comma-separated items. Dropped "(formerly …)" aliases, "This skill should be used when" boilerplate, keyword lists, and cross-skill boundary notes already carried by each body's Related Skills section. `lint` enforces the pack-wide budget (280 tokens, 120 words, 15 list items). A 36-prompt trigger eval showed no recall loss: prompts that don't name the library went from 13/16 to 16/16, named prompts stayed 12/12, and no negative prompt triggered a skill.
+- Normalized every rule-based skill's "How to Use" section and removed dead "Full Compiled Document" / "Reference Files" pointers.
+- MCP tests and packaging scripts derive skill and file counts from disk instead of hardcoding them.
+- README rule counts now match the files on disk and are enforced by `lint`.
+- Re-audited the version baseline against React 19.3, Next.js 16.3.6, Vitest 5.0.2, Playwright 1.63, TanStack Query 5.104, React Hook Form 7.89, Zod 4.6.5 and nuqs 2.10.1. The README states what the audit covered.
+- `web-design-guidelines` fetches `command.md` from a pinned, reviewed upstream commit instead of `main`.
+- README cleanup: dropped the stale agent count and CLI version, and the leftover `AGENTS.md` and `metadata.json` mentions.
+
+### Fixed
+
+- Rule examples that contradicted other rules or current APIs: Zod refinements used the deprecated `message` param (now `error`); `perf-zod-mini` showed `z.string().email()`; `import-path-aliases` recommended `baseUrl`, which TypeScript 7 removed; TanStack Query's server prefetch examples read Next.js `params` synchronously; Playwright used the deprecated `waitForNavigation()`; MSW claimed `request.body` is `undefined` in v2 (it is a stream); shadcn named the pre-rename `@base-ui-components/react` package; two Vercel rules called `useEffectEvent` "stable" (react.dev: its identity changes every render); the Tailwind CLI rule did not explain why `tailwindcss` in npm scripts still works.
+- TanStack Query prefetch examples use `queryClient.query(options).catch(noop)`; 5.102 deprecated `prefetchQuery`, `fetchQuery` and `ensureQueryData`.
+- Vitest 5 rules: `clearMocks` now defaults to `true`, unawaited assertions fail the test, `page` comes from `vitest/browser`, the migration rule named a nonexistent `@vitest/istanbuljs` package and `--no-cache` flag, `restoreAllMocks`/`resetAllMocks` behaviour was described backwards, and the `perf-disable-isolation` project examples lacked the `test` wrapper.
+- Zod `object-partial-for-updates` said Zod 4 removed `deepPartial()`; Zod 4.5 added `z.deepPartial(schema)`.
+- `bundle-barrel-imports` and `async-defer-await` re-synced with upstream: they recommend `optimizePackageImports` over untyped `lucide-react` deep imports, and link the cheap-condition rule.
+
+### Removed
+
+- Per-skill `AGENTS.md` files. Thirteen were tables of contents duplicating `SKILL.md` while claiming to be "all rules expanded"; the two Vercel compiled guides were stale (57 of 70 and 7 of 8 rules) and predated this repo's local rule patches. `SKILL.md` is the single index.
+- Per-skill `metadata.json` files. The `skills` CLI excludes them at install time, so the links to them were dead for installed users, and their rule counts had drifted.
+- Ten `_sections.md` / `_template.md` files that no `SKILL.md` linked; each duplicated its skill's category table. `lint` now rejects any unlinked Markdown file in `references/` or `rules/`.
+
+## [2.0.1] - 2026-08-20
+
+### Changed
+
+- Audited all 18 skills against current official documentation and the August 2026 package baseline.
+- Updated Next.js 16 caching/Turbopack guidance, TypeScript 7 migration notes, Zod 4 APIs, nuqs 2 rate limiting, Vitest 4 requirements, Playwright readiness guidance, Tailwind CSS 4 integration, and shadcn Radix/Base UI scope.
+- Replaced unsupported impact estimates with project-specific measurement guidance and repaired stale official links.
+- Updated repository metadata for the `PyModel/react-frontend-skills` location.
+- Changed the canonical npm package scope to `@pymodel/react-frontend-skills`.
+
+## [2.0.0] - 2026-06-20
+
+### Changed
+
+- 🏷️ **Rebranded to React Frontend Skills** under the **Pythoughts** organization,
+  authored and maintained by **Mohamed Elkholy**.
+- 📦 Repository moved to `Pythoughts-labs/react-frontend-skills`; all install
+  commands and links updated accordingly.
+- 📄 Licensed under MIT © 2026 Mohamed Elkholy (see `LICENSE`).
+
+### Added
+
+- 🤖 **Per-agent install matrix** in the README for Claude Code, Codex, Cursor,
+  OpenCode, Pi, and Kiro CLI, plus a manual path for Pythinker and any
+  AGENTS.md-aware agent.
+- `.gitignore` for OS/editor/Node artifacts.
+
+## 1.1.0 - 2026-01-28
+
+### Added
+
+- 🎉 **9 New Skills** - Expanded from 10 to 19 skills total
+  - **react** - React 19 concurrent rendering, Server Components, hooks optimization (40+ rules)
+  - **react-hook-form** - Form validation and performance patterns (41+ rules)
+  - **zod** - Schema validation, type inference, and error handling (43+ rules)
+  - **nuqs** - Type-safe URL query state management for Next.js (42+ rules)
+  - **playwright** - E2E testing best practices for Next.js (43+ rules)
+  - **msw** - Mock Service Worker API mocking patterns (45+ rules)
+  - **feature-arch** - Feature-based architecture guidelines (42+ rules)
+  - **tdd** - Test-Driven Development methodology (42+ rules)
+  - **ui-design** - UI/UX and frontend design best practices (42+ rules)
+
+### Changed
+
+- 📝 **Complete README Overhaul**
+  - Professional design with badges and visual elements
+  - Categorized skills by function (Core Framework, UI & Styling, Data Management, Testing, Architecture)
+  - Added impact priority table (CRITICAL, HIGH, MEDIUM, LOW)
+  - Improved quick start guide with `--all` flag documentation
+  - Enhanced project structure visualization
+  - Added 33+ supported AI agents list with expandable details
+  - Better usage examples and code snippets
+
+### Improved
+
+- ⚡ **Simplified Installation** - Added `--all` flag support for one-command installation:
+  ```bash
+  npx skills add Pythoughts-labs/react-frontend-skills --all
+  ```
+- 📊 **Better Organization** - Skills now grouped into 5 clear categories
+- 🎨 **Enhanced Presentation** - Professional badges, emojis, and formatting
+- 📚 **Comprehensive Coverage** - Now covers entire React ecosystem from architecture to testing
+
+### Documentation
+
+- Added detailed skill descriptions with rule counts
+- Included "Why React Agent Skills?" section with key benefits
+- Added collapsible section for full agent compatibility list
+- Enhanced contributing guide with clear examples
+- Updated acknowledgments with new skill sources
+
+## 1.0.0 - 2026-01-27
+
+### Added
+
+- Initial release of React Agent Skills repository
+- Complete README documentation in English
+- 9 comprehensive skill collections:
+  - **Next.js 16 App Router** - 40+ performance optimization rules
+  - **TypeScript** - 42+ optimization rules for compilation and type checking
+  - **Vitest** - 44+ testing patterns and best practices
+  - **ShadCN UI** - Component patterns and accessibility guidelines
+  - **Tailwind CSS** - Utility-first CSS patterns
+  - **TanStack Query** - Data fetching and caching strategies
+  - **Vercel Composition Patterns** - React composition patterns
+  - **Vercel React Best Practices** - React best practices
+  - **Web Design Guidelines** - UI/UX design principles
+- Detailed project structure documentation
+- Installation and usage instructions for AI coding assistants
+- Code examples and scenarios for each major skill
+- Contributing guidelines for community contributions
+
+### Documentation
+
+- Complete README with installation, usage, and contribution guides
+- Project structure overview with detailed file organization
+- Example scenarios for Next.js, TypeScript, and Vitest
+- Priority-based skill organization (CRITICAL, HIGH, MEDIUM, LOW)
+- Category-based rule grouping for easy navigation
+
+[Unreleased]: https://github.com/PyModel/react-frontend-skills/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/PyModel/react-frontend-skills/compare/v3.0.1...v4.0.0
+[3.0.1]: https://github.com/PyModel/react-frontend-skills/compare/v3.0.0...v3.0.1
+[3.0.0]: https://github.com/PyModel/react-frontend-skills/compare/v2.3.0...v3.0.0
+[2.3.0]: https://github.com/PyModel/react-frontend-skills/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/PyModel/react-frontend-skills/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/PyModel/react-frontend-skills/compare/v2.0.1...v2.1.0
+[2.0.1]: https://github.com/PyModel/react-frontend-skills/compare/v2.0.0...v2.0.1
+[2.0.0]: https://github.com/PyModel/react-frontend-skills/releases/tag/v2.0.0

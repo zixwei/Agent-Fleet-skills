@@ -1,0 +1,102 @@
+import assert from 'node:assert/strict'
+import { readdirSync } from 'node:fs'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import test from 'node:test'
+import { fileURLToPath } from 'node:url'
+import { loadCatalog, MAX_SNIPPET_LENGTH } from '../src/catalog.js'
+
+const repositorySkills = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills')
+const catalog = await loadCatalog({ skillsDir: repositorySkills })
+const skillsOnDisk = readdirSync(catalog.skillsDirectory, { withFileTypes: true }).filter(
+  (entry) => entry.isDirectory() && !entry.name.startsWith('.')
+)
+const markdownOnDisk = readdirSync(catalog.skillsDirectory, { recursive: true }).filter(
+  (path) => path.endsWith('.md') && !path.split(/[\\/]/).some((part) => part.startsWith('.'))
+)
+
+test('loads every skill and Markdown file from the repository', () => {
+  assert.equal(catalog.skills.length, skillsOnDisk.length)
+  assert.equal(catalog.files.length, markdownOnDisk.length)
+  assert.equal(new Set(catalog.files.map((file) => file.id)).size, catalog.files.length)
+
+  const nextjs = catalog.getSkill('nextjs')
+  assert.ok(nextjs)
+  assert.match(nextjs.description, /Next\.js 16/)
+  assert.match(nextjs.content, /^---\n/)
+})
+
+test('lists stable resource metadata for every Markdown file', () => {
+  const resources = catalog.listResources()
+
+  assert.equal(resources.length, catalog.files.length)
+  assert.equal(new Set(resources.map((resource) => resource.uri)).size, resources.length)
+  assert.ok(resources.every((resource) => resource.mimeType === 'text/markdown'))
+  assert.ok(resources.some((resource) => resource.name === 'react/SKILL.md'))
+})
+
+test('search returns bounded ranked excerpts and supports an exact skill filter', () => {
+  const matches = catalog.search('cache components', { skill: 'nextjs', limit: 3 })
+
+  assert.ok(matches.length > 0)
+  assert.ok(matches.length <= 3)
+  assert.ok(matches.every((match) => match.skill === 'nextjs'))
+  assert.equal(matches[0].path, 'references/cache-use-cache-directive.md')
+  assert.ok(matches[0].line > 0)
+  assert.ok(matches[0].snippet.length <= MAX_SNIPPET_LENGTH)
+})
+
+test('reference lookup rejects traversal and non-Markdown paths', () => {
+  assert.equal(catalog.getReference('nextjs', '../package.json'), undefined)
+  assert.equal(catalog.getReference('nextjs', '/etc/passwd.md'), undefined)
+  assert.equal(catalog.getReference('nextjs', 'references\\cache-fetch-options.md'), undefined)
+  assert.equal(catalog.getReference('nextjs', 'references/cache-fetch-options.txt'), undefined)
+  assert.ok(catalog.getReference('nextjs', 'references/cache-fetch-options.md'))
+})
+
+test('configured missing directory fails with an actionable error', async () => {
+  await assert.rejects(
+    loadCatalog({ skillsDir: join(tmpdir(), 'react-skills-directory-that-does-not-exist') }),
+    /Configured skills directory does not exist/
+  )
+})
+
+test('invalid frontmatter fails during catalog loading', async (context) => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'react-skills-invalid-'))
+  context.after(() => rm(fixtureRoot, { recursive: true, force: true }))
+
+  const skillDirectory = join(fixtureRoot, 'broken')
+  await mkdir(skillDirectory)
+  await writeFile(join(skillDirectory, 'SKILL.md'), '---\nname: [broken\n---\n# Broken\n')
+
+  await assert.rejects(loadCatalog({ skillsDir: fixtureRoot }), /Invalid frontmatter/)
+})
+
+test('a skill without SKILL.md fails during catalog loading', async (context) => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'react-skills-missing-'))
+  context.after(() => rm(fixtureRoot, { recursive: true, force: true }))
+
+  await mkdir(join(fixtureRoot, 'broken'))
+  await assert.rejects(loadCatalog({ skillsDir: fixtureRoot }), /Missing SKILL.md for broken/)
+})
+
+test('unclosed frontmatter fails during catalog loading', async (context) => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'react-skills-unclosed-'))
+  context.after(() => rm(fixtureRoot, { recursive: true, force: true }))
+
+  await mkdir(join(fixtureRoot, 'broken'))
+  await writeFile(join(fixtureRoot, 'broken', 'SKILL.md'), '---\nname: broken\n# no closing fence\n')
+  await assert.rejects(loadCatalog({ skillsDir: fixtureRoot }), /Unclosed frontmatter/)
+})
+
+test('CRLF frontmatter still yields the skill description', async (context) => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'react-skills-crlf-'))
+  context.after(() => rm(fixtureRoot, { recursive: true, force: true }))
+
+  await mkdir(join(fixtureRoot, 'demo'))
+  await writeFile(join(fixtureRoot, 'demo', 'SKILL.md'), '---\r\nname: demo\r\ndescription: Demo skill.\r\n---\r\n# Demo\r\n')
+
+  const crlf = await loadCatalog({ skillsDir: fixtureRoot })
+  assert.equal(crlf.getSkill('demo').description, 'Demo skill.')
+})
